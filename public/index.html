@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>المركز الفرنسي | إدارة الصيانة</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark">F</span><div><b>المركز الفرنسي</b><small>نظام إدارة الصيانة</small></div></div>
+      <nav>
+        <button class="nav-btn active" data-page="dashboard"><span>⌂</span> لوحة التحكم</button>
+        <button class="nav-btn" data-page="customers"><span>⚒</span> صيانة / زيارة جديدة</button>
+        <button class="nav-btn" data-page="clients"><span>♙</span> بيانات العملاء</button>
+        <button class="nav-btn" data-page="inventory"><span>▣</span> المخزن</button>
+      </nav>
+      <a class="export-link" href="/api/export">تنزيل نسخة Excel</a>
+      <div class="side-note">قاعدة البيانات: <b id="databaseFileName">main data 2.xlsx</b></div>
+    </aside>
+
+    <main>
+      <header class="topbar"><button id="menuBtn" class="icon-btn">☰</button><div><span id="today"></span><small>مرحبًا بك في لوحة الإدارة</small></div></header>
+
+      <section id="dashboard" class="page active">
+        <div class="page-title"><div><span class="eyebrow">نظرة سريعة</span><h1>لوحة التحكم</h1><p>ملخص العملاء وحركة الصيانة المسجلة في ملف Excel.</p></div></div>
+        <div class="stats stats-3">
+          <article><span class="stat-icon blue">♙</span><div><small>العملاء الجدد هذا الشهر</small><strong id="newCustomersMonth">0</strong></div></article>
+          <article><span class="stat-icon green">✓</span><div><small>إجمالي الزيارات هذا الشهر</small><strong id="monthVisitsCount">0</strong></div></article>
+          <article id="lowStockSummary" class="clickable-stat" role="button" tabindex="0"><span class="stat-icon orange">!</span><div><small>تنبيهات المخزن</small><strong id="lowStockCount">0</strong></div></article>
+        </div>
+        <h2 class="dashboard-group-title">النتائج المالية هذا الشهر</h2>
+        <div class="stats">
+          <article><span class="stat-icon blue">ج</span><div><small>الدخل الشهري</small><strong id="monthlyIncome">0 ج</strong></div></article>
+          <article><span class="stat-icon green">●</span><div><small>المبلغ المتوفر</small><strong id="availableAmount">0 ج</strong></div></article>
+          <article><span class="stat-icon orange">↗</span><div><small>أرباح البضاعة</small><strong id="goodsProfit">0 ج</strong></div></article>
+          <article><span class="stat-icon purple">⚒</span><div><small>أرباح المصنعية</small><strong id="laborProfit">0 ج</strong></div></article>
+        </div>
+        <div class="stats stats-4">
+          <article><span class="stat-icon orange">−</span><div><small>مصروفات الشهر</small><strong id="monthlyExpenses">0 ج</strong></div></article>
+          <article><span class="stat-icon blue">✓</span><div><small>المدفوع للموردين</small><strong id="suppliersPaid">0 ج</strong></div></article>
+          <article><span class="stat-icon purple">⌛</span><div><small>المستحق للموردين</small><strong id="suppliersDue">0 ج</strong></div></article>
+          <article><span class="stat-icon green">▣</span><div><small>قيمة البضاعة بالمخزن</small><strong id="inventoryValue">0 ج</strong></div></article>
+        </div>
+        <div class="dashboard-bottom-grid">
+          <button id="lowStockPanel" class="panel low-stock-panel" data-go="inventory"><div class="panel-head"><div><h2>تنبيهات المخزن — القطع القريبة من النفاد</h2><p>اضغط لفتح المخزن ومراجعة الكميات</p></div><span class="open-arrow">←</span></div><div id="lowStockItems"></div></button>
+          <div class="panel recent-visits-panel"><div class="panel-head"><div><h2>آخر الزيارات هذا الشهر</h2><p>أحدث 5 عمليات صيانة</p></div><button class="text-btn" data-go="clients">عرض الكل ←</button></div><div id="recentVisits"></div></div>
+        </div>
+      </section>
+
+      <section id="customers" class="page">
+        <div class="page-title"><div><span class="eyebrow">استقبال السيارات</span><h1>صيانة / زيارة جديدة</h1><p>سجل عميلًا جديدًا أو أضف زيارة صيانة لعميل موجود.</p></div></div>
+        <div id="customerChoices" class="choice-grid">
+          <button class="choice-card" data-mode="new"><span>＋</span><b>عميل جديد</b><small>إنشاء كود عميل وتسجيل بيانات العربية</small></button>
+          <button class="choice-card" data-mode="old"><span>⌕</span><b>عميل قديم</b><small>البحث بكود العميل أو لوحة العربية</small></button>
+        </div>
+
+        <div id="newCustomerView" class="subview hidden">
+          <div class="section-bar"><button class="back-btn">→ رجوع</button><div><h2>تسجيل عميل جديد</h2><p>سيتم إنشاء كود العميل تلقائيًا وحفظه في شيت بيانات العميل.</p></div></div>
+          <form id="customerForm" class="panel form-panel">
+            <div class="form-grid">
+              <label>اسم العميل<input name="name" required placeholder="الاسم بالكامل"></label>
+              <label>رقم التليفون<input name="phone" required inputmode="tel" placeholder="01xxxxxxxxx"></label>
+              <label>لوحة العربية<input name="plate" required placeholder="مثال: أ ب ج 1234"></label>
+              <label>نوع العربية<input name="carType" required placeholder="مثال: بيجو 301 - 2020"></label>
+            </div>
+            <div class="form-actions"><button class="primary" type="submit">حفظ العميل</button><button class="secondary" type="reset">مسح البيانات</button></div>
+          </form>
+        </div>
+
+        <div id="oldCustomerView" class="subview hidden">
+          <div class="section-bar"><button class="back-btn">→ رجوع</button><div><h2>البحث عن عميل قديم</h2><p>يكفي كتابة كود العميل أو لوحة العربية.</p></div></div>
+          <div class="panel search-box"><div><label>كود العميل<input id="searchCode" placeholder="مثال: C1"></label><span>أو</span><label>لوحة العربية<input id="searchPlate" placeholder="مثال: أ ب ج 1234"></label></div><button id="searchBtn" class="primary">بحث</button></div>
+          <div id="searchMessage" class="empty-state">ابدأ البحث لعرض بيانات العميل وزياراته السابقة.</div>
+          <div id="customerResult" class="hidden"></div>
+        </div>
+      </section>
+
+      <section id="clients" class="page">
+        <div id="clientDirectoryView">
+          <div class="page-title"><div><span class="eyebrow">سجل المركز</span><h1>بيانات العملاء</h1><p>ابحث بكود العميل أو كود الزيارة، أو اختر عميلًا من القائمة.</p></div></div>
+          <div class="panel directory-search"><label>كود العميل<input id="directoryCustomerCode" placeholder="مثال: C1"></label><span>أو</span><label>كود الزيارة<input id="directoryVisitCode" placeholder="مثال: V1"></label><button id="directorySearchBtn" class="primary">بحث</button></div>
+          <div class="panel"><div class="panel-head"><div><h2>كل العملاء</h2><p id="directoryCount"></p></div></div><div id="customersDirectory"></div></div>
+        </div>
+        <div id="clientRecordView" class="hidden">
+          <div class="section-bar"><button id="clientRecordBack" class="back-btn">→ رجوع إلى كل العملاء</button><div><h2>سجل العميل</h2><p>بيانات العميل وكل زيارات الصيانة.</p></div></div>
+          <div id="clientRecordContent"></div>
+        </div>
+      </section>
+
+      <section id="inventory" class="page">
+        <div class="page-title"><div><span class="eyebrow">متابعة قطع الغيار</span><h1>المخزن</h1><p>عرض المنتجات والكميات والأسعار المسجلة في شيت المخزن.</p></div><button id="openInventoryAdd" class="primary">＋ إضافة بضاعة</button></div>
+        <div class="panel"><div class="panel-head"><div><h2>رصيد المخزن</h2><p>المنتجات ذات الكمية 3 أو أقل مميزة كتنبيه.</p></div></div><div id="inventoryTable"></div></div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="visitDialog"><form id="visitForm" method="dialog"><button type="button" class="dialog-close" data-close>×</button><div class="dialog-title"><span>＋</span><div><h2>زيارة صيانة جديدة</h2><p id="visitCustomerName"></p></div></div><div class="form-grid"><label>تاريخ الزيارة<input name="date" type="date" required></label><label>قراءة العداد (كم)<input name="mileage" type="number" min="0" placeholder="0"></label><label>نوع الصيانة<input name="serviceType" required placeholder="مثال: تغيير زيت وفلاتر"></label><label>اسم الفني<input name="technician" placeholder="اسم الفني المسؤول"></label><div class="wide parts-section"><div class="parts-title"><div><b>قطع الغيار من المخزن</b><small>اختر كل منتج والكمية المستخدمة</small></div><button id="addVisitPart" class="secondary small-button" type="button">＋ إضافة منتج آخر</button></div><div id="visitPartsRows"></div><div class="parts-total"><span>إجمالي قطع الغيار</span><strong id="visitPartsTotal">٠ ج</strong></div></div><label>المصنعية <span class="required-mark">*</span><input name="labor" type="number" min="0.01" step="0.01" required placeholder="اكتب قيمة المصنعية"></label><label class="wide">ملاحظات<textarea name="notes" rows="3" placeholder="أي ملاحظات عن الزيارة"></textarea></label></div><div class="form-actions"><button class="primary" type="submit">حفظ الزيارة</button><button class="secondary" type="button" data-close>إلغاء</button></div></form></dialog>
+  <dialog id="detailsDialog"><div class="details-dialog"><button type="button" class="dialog-close" data-close>×</button><div id="visitDetails"></div></div></dialog>
+  <dialog id="inventoryDialog"><div class="inventory-dialog"><button type="button" class="dialog-close" data-close>×</button><div class="dialog-title"><span>▣</span><div><h2>إضافة بضاعة للمخزن</h2><p>اختر منتجًا جديدًا أو أضف كمية لمنتج موجود.</p></div></div><div id="inventoryModeChoice" class="inventory-mode-choice"><button type="button" class="choice-card compact-choice" data-inventory-mode="new"><span>＋</span><b>منتج جديد</b><small>تسجيل منتج وكود جديد</small></button><button type="button" class="choice-card compact-choice" data-inventory-mode="old"><span>↻</span><b>منتج قديم</b><small>زيادة كمية منتج موجود</small></button></div><form id="inventoryForm" class="hidden"><input type="hidden" name="mode"><div id="newProductFields" class="form-grid hidden"><label>اسم المنتج<input name="name" placeholder="اسم المنتج"></label><label>تفاصيل المنتج<input name="details" placeholder="النوع أو الوصف"></label><label>بلد المنشأ<input name="country" placeholder="بلد المنشأ"></label><label>كود المنتج<input name="code" placeholder="يُكتب يدويًا"></label></div><div id="oldProductFields" class="hidden"><label class="product-search-label">ابحث بالكود أو الاسم<input id="oldProductSearch" placeholder="ابدأ بكتابة الكود أو اسم المنتج"></label><div id="productSuggestions" class="product-suggestions"></div><div id="selectedOldProduct" class="selected-product hidden"></div></div><div class="form-grid inventory-common-fields"><label>الكمية المضافة<input name="qty" type="number" min="1" value="1"></label><label>سعر الشراء للوحدة<input name="buy" type="number" min="0" step="0.01" value="0"></label><label>سعر البيع للوحدة<input name="sell" type="number" min="0" step="0.01" value="0"></label><label>اسم المورد<select name="supplier" id="inventorySupplier"></select></label><label>المبلغ المدفوع<input name="paid" type="number" min="0" step="0.01" value="0"></label><label>المبلغ المتبقي<input id="inventoryDue" type="number" readonly value="0"></label></div><div class="inventory-calculation"><span>إجمالي الشراء: <b id="inventoryPurchaseTotal">٠ ج</b></span><span>هامش ربح الوحدة: <b id="inventoryMargin">٠ ج</b></span></div><div class="form-actions"><button class="primary" type="submit">حفظ البضاعة</button><button id="inventoryModeBack" class="secondary" type="button">رجوع</button></div></form></div></dialog>
+  <div id="toast" class="toast"></div>
+  <script src="/app.js"></script>
+</body>
+</html>
