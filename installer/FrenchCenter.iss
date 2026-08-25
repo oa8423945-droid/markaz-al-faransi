@@ -29,7 +29,7 @@ Source: "stage\data\main data 2.xlsx"; DestDir: "{app}\data"; Flags: onlyifdoesn
 [Icons]
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\{#MyAppExeName}"""; WorkingDir: "{app}"
 Name: "{group}\{#MyAppName}"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\{#MyAppExeName}"""; WorkingDir: "{app}"
-Name: "{group}\فتح ملف البيانات"; Filename: "{app}\فتح ملف البيانات.bat"; WorkingDir: "{app}"
+Name: "{group}\فتح ملف البيانات"; Filename: "{app}\open-data.bat"; WorkingDir: "{app}"
 
 [Run]
 Filename: "{sys}\wscript.exe"; Parameters: """{app}\{#MyAppExeName}"""; Description: "تشغيل المركز الفرنسي"; Flags: nowait postinstall skipifsilent
