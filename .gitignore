@@ -8,3 +8,6 @@ sources/
 AGENTS.md
 data/Book1.xlsx
 .npm-cache/
+installer/stage/
+installer/output/
+
