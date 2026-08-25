@@ -72,7 +72,7 @@ jobs:
         run: |
           gh release view windows-latest *> $null
           if ($LASTEXITCODE -ne 0) {
-            gh release create windows-latest "installer\output\FrenchCenter-Setup.exe" --title "المركز الفرنسي - Windows Setup" --notes "ملف تثبيت كامل لنظام Windows 10 وWindows 11."
+            gh release create windows-latest "installer\output\FrenchCenter-Setup.exe" --title "French Center - Windows Setup" --notes "Complete installer for Windows 10 and Windows 11."
           } else {
             gh release upload windows-latest "installer\output\FrenchCenter-Setup.exe" --clobber
           }
