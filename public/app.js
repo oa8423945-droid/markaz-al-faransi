@@ -1123,7 +1123,7 @@ function showVisit(code) {
   const movementBox = visit.stockMovementCode
     ? `<div class="visit-detail-box"><small>كود حركة المخزن</small><button type="button" class="movement-code-link" data-movement-code="${esc(visit.stockMovementCode)}">${esc(visit.stockMovementCode)} ←</button></div>`
     : box('كود حركة المخزن', 'لا توجد حركة مخزن');
-  $('#visitDetails').innerHTML = `<div class="dialog-title"><span>✓</span><div><h2>تفاصيل زيارة الصيانة</h2><p>${esc(customer.name || '—')} — ${esc(visit.code)}</p></div></div><div class="visit-detail-layout">
+  $('#visitDetails').innerHTML = `<div class="dialog-title visit-dialog-title"><span>✓</span><div><h2>تفاصيل زيارة الصيانة</h2><p>${esc(customer.name || '—')} — ${esc(visit.code)}</p></div><button id="printVisitInvoice" type="button" class="primary visit-print-button">طباعة الفاتورة</button></div><div class="visit-detail-layout">
     ${box('اسم العميل', customer.name || '—')}${box('التاريخ', visit.date || '—')}
     ${box('كود العميل', visit.customerCode || '—')}${box('كود الزيارة', visit.code || '—')}
     ${movementBox}${box('نوع الحركة', visit.stockMovementCode ? 'صادر' : '—')}
@@ -1131,11 +1131,37 @@ function showVisit(code) {
     ${box('قراءة العداد', `${fmt(visit.mileage)} كم`)}${box('نوع الصيانة', visit.serviceType || '—')}
     ${box('اسم الفني', visit.technician || '—')}${box('المصنعية', `${fmt(visit.labor)} ج`)}
     <div class="visit-special-box parts-box"><small>قطع الغيار المستخدمة</small><b>${esc(visit.partsCodes || 'لا توجد قطع غيار')}</b></div>
-    <div class="visit-special-box money-box"><small>المبالغ</small><div><span>قطع الغيار <b>${fmt(visit.partsTotal)} ج</b></span><span>الإجمالي <b>${fmt(visit.total)} ج</b></span><span>المدفوع <b>${fmt(visit.paid)} ج</b></span><span>المتبقي <b>${fmt(visit.due)} ج</b></span><span>طرق الدفع <b>${esc(visit.paymentDetails || visit.paymentMethod || '—')}</b></span></div></div>
+    <div class="visit-special-box money-box"><small>المبالغ</small><div><span>قطع الغيار <b>${fmt(visit.partsTotal)} ج</b></span><span>المصنعية <b>${fmt(visit.labor)} ج</b></span><span>الإجمالي <b>${fmt(visit.total)} ج</b></span><span>المدفوع <b>${fmt(visit.paid)} ج</b></span><span>المتبقي <b>${fmt(visit.due)} ج</b></span><span>طرق الدفع <b>${esc(visit.paymentDetails || visit.paymentMethod || '—')}</b></span></div></div>
     ${box('الملاحظات', visit.notes || '—', 'notes-box')}
   </div>`;
   $('#visitDetails .movement-code-link')?.addEventListener('click', (event) => openMovementByCode(event.currentTarget.dataset.movementCode));
+  $('#printVisitInvoice').addEventListener('click', () => printVisitInvoice(visit, customer));
   $('#detailsDialog').showModal();
+}
+
+function printVisitInvoice(visit, customer) {
+  const printWindow = window.open('', '_blank', 'width=900,height=760');
+  if (!printWindow) {
+    toast('اسمح بفتح النوافذ المنبثقة لطباعة الفاتورة.', true);
+    return;
+  }
+  const cell = (label, value) => `<div class="cell"><small>${esc(label)}</small><b>${esc(value || '—')}</b></div>`;
+  const notes = clean(visit.notes);
+  printWindow.document.open();
+  printWindow.document.write(`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>فاتورة ${esc(visit.code)}</title><style>
+    @page{size:A4;margin:14mm}*{box-sizing:border-box}body{font-family:Tahoma,Arial,sans-serif;color:#111827;margin:0;background:#fff}.invoice{max-width:760px;margin:auto;border:1px solid #d8dee8;border-radius:14px;padding:24px}.head{display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #2676ee;padding-bottom:15px;margin-bottom:18px}.head h1{font-size:24px;margin:0}.head p{font-size:12px;color:#667085;margin:5px 0 0}.date{font-size:12px;font-weight:700}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.cell{border:1px solid #e1e6ee;border-radius:9px;padding:11px;background:#f8fafc}.cell small,.cell b{display:block}.cell small{font-size:10px;color:#667085;margin-bottom:5px}.cell b{font-size:13px}.wide{grid-column:1/-1}.section{margin-top:14px;border:1px solid #e1e6ee;border-radius:10px;overflow:hidden}.section h2{font-size:13px;margin:0;padding:10px 13px;background:#eef5ff}.parts{padding:14px;font-weight:700;line-height:1.9;min-height:54px}.totals{margin-top:14px;margin-right:auto;width:min(360px,100%);border:1px solid #cfd8e6;border-radius:10px;overflow:hidden}.totals div{display:flex;justify-content:space-between;padding:11px 14px;border-bottom:1px solid #e5e9f0}.totals div:last-child{border:0;background:#edf8f3;font-size:17px;font-weight:900}.footer{text-align:center;color:#667085;font-size:10px;margin-top:24px}@media print{.invoice{border:0;padding:0}}
+  </style></head><body><main class="invoice"><header class="head"><div><h1>المركز الفرنسي</h1><p>فاتورة زيارة صيانة</p></div><div class="date">التاريخ: ${esc(visit.date || '—')}</div></header>
+  <section class="grid">
+    ${cell('اسم العميل', customer.name)}${cell('كود العميل', visit.customerCode)}
+    ${cell('كود الزيارة', visit.code)}${cell('كود الحركة', visit.stockMovementCode || '—')}
+    ${cell('نوع العربية', customer.carType)}${cell('لوحة العربية', visit.plate || customer.plate)}
+    ${cell('قراءة العداد', `${fmt(visit.mileage)} كم`)}${cell('نوع الصيانة', visit.serviceType)}
+    ${notes ? `<div class="cell wide"><small>الملاحظات</small><b>${esc(notes)}</b></div>` : ''}
+  </section>
+  <section class="section"><h2>قطع الغيار المستخدمة</h2><div class="parts">${esc(visit.partsCodes || 'لا توجد قطع غيار')}</div></section>
+  <section class="totals"><div><span>تكلفة قطع الغيار</span><b>${fmt(visit.partsTotal)} ج</b></div><div><span>تكلفة المصنعية</span><b>${fmt(visit.labor)} ج</b></div><div><span>الإجمالي</span><b>${fmt(visit.total)} ج</b></div></section>
+  <div class="footer">شكرًا لثقتكم في المركز الفرنسي</div></main><script>window.addEventListener('load',()=>setTimeout(()=>{window.focus();window.print()},250));<\/script></body></html>`);
+  printWindow.document.close();
 }
 
 function openMovementByCode(code) {
