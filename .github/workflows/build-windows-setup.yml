@@ -12,6 +12,7 @@ on:
       - "package-lock.json"
       - "start-system.bat"
       - "start-system.vbs"
+      - "open-data.bat"
       - "تشغيل النظام.bat"
       - "فتح ملف البيانات.bat"
       - "installer/**"
@@ -41,7 +42,10 @@ jobs:
         run: |
           $stage = "installer\stage"
           New-Item -ItemType Directory -Force "$stage\runtime", "$stage\data" | Out-Null
-          Copy-Item server.js, package.json, package-lock.json, README.md, start-system.bat, start-system.vbs, "تشغيل النظام.bat", "فتح ملف البيانات.bat" $stage
+          $rootFiles = @("server.js", "package.json", "package-lock.json", "README.md", "start-system.bat", "start-system.vbs", "open-data.bat")
+          foreach ($file in $rootFiles) {
+            Copy-Item -LiteralPath $file -Destination $stage
+          }
           Copy-Item public "$stage\public" -Recurse
           Copy-Item node_modules "$stage\node_modules" -Recurse
           Copy-Item "data\main data 2.xlsx" "$stage\data\main data 2.xlsx"
