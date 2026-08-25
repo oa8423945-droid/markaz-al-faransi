@@ -2,6 +2,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const XLSX = require('xlsx');
+const PDFDocument = require('pdfkit');
 
 const PORT = Number(process.env.PORT || 3210);
 const ROOT = __dirname;
@@ -468,6 +469,103 @@ async function bodyOf(request) {
   return body ? JSON.parse(body) : {};
 }
 
+function visitInvoicePdf(visit, customer) {
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({ size: 'A4', margins: { top: 34, right: 40, bottom: 34, left: 40 }, bufferPages: true });
+      const chunks = [];
+      doc.on('data', (chunk) => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      const windowsFonts = path.join(process.env.WINDIR || 'C:\\Windows', 'Fonts');
+      const regularFont = ['tahoma.ttf', 'arial.ttf'].map((name) => path.join(windowsFonts, name)).find(fs.existsSync);
+      const boldFont = ['tahomabd.ttf', 'arialbd.ttf'].map((name) => path.join(windowsFonts, name)).find(fs.existsSync);
+      if (!regularFont || !boldFont) throw new Error('تعذر العثور على خط عربي مناسب لإنشاء الفاتورة.');
+      doc.registerFont('Arabic', regularFont);
+      doc.registerFont('ArabicBold', boldFont);
+
+      const pageWidth = doc.page.width;
+      const right = pageWidth - 40;
+      const left = 40;
+      const contentWidth = right - left;
+      // PDFKit يعكس الأرقام داخل السطر العربي؛ نعكس النص الرقمي مسبقًا ليظهر صحيحًا في الفاتورة.
+      const rtlNumber = (value) => [...String(value)].reverse().join('');
+      const money = (value) => `${rtlNumber(Number(value || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }))}\u00A0جنيه`;
+      const valueText = (value) => clean(value) || '—';
+      const rtl = (text, x, y, width, options = {}) => {
+        doc.font(options.bold ? 'ArabicBold' : 'Arabic').fontSize(options.size || 10).fillColor(options.color || '#111827')
+          .text(String(text).replace(/\s+/g, '\u00A0'), x, y, { width, align: 'right', lineGap: options.lineGap || 0 });
+      };
+      const logoPath = path.join(PUBLIC, 'invoice-logo.b64');
+      if (fs.existsSync(logoPath)) {
+        const logo = Buffer.from(fs.readFileSync(logoPath, 'utf8').trim(), 'base64');
+        doc.image(logo, right - 82, 34, { fit: [82, 82], align: 'center', valign: 'center' });
+      }
+      rtl('المركز الفرنسي', left, 47, 265, { bold: true, size: 24 });
+      doc.font('Arabic').fontSize(9).fillColor('#667085').text('French Center For Car Maintenance', left, 78, { width: 265, align: 'left' });
+      doc.moveTo(left, 124).lineTo(right, 124).lineWidth(3).strokeColor('#F7941D').stroke();
+      rtl('فاتورة زيارة صيانة', left, 134, contentWidth / 2, { bold: true, size: 12, color: '#2676EE' });
+      rtl(`التاريخ: ${rtlNumber(valueText(visit.date))}`, right - contentWidth / 2, 134, contentWidth / 2, { bold: true, size: 10 });
+
+      const gap = 10;
+      const boxWidth = (contentWidth - gap) / 2;
+      const boxHeight = 52;
+      const drawBox = (x, y, label, value) => {
+        doc.roundedRect(x, y, boxWidth, boxHeight, 7).fillAndStroke('#F8FAFC', '#DDE3EC');
+        rtl(label, x + 9, y + 7, boxWidth - 18, { size: 8, color: '#667085' });
+        rtl(valueText(value), x + 9, y + 25, boxWidth - 18, { bold: true, size: 10 });
+      };
+      let y = 164;
+      const details = [
+        ['اسم العميل', customer.name], ['كود العميل', visit.customerCode],
+        ['كود الزيارة', visit.code], ['كود الحركة', visit.stockMovementCode],
+        ['نوع العربية', customer.carType], ['لوحة العربية', visit.plate || customer.plate],
+        ['قراءة العداد', `${rtlNumber(Number(visit.mileage || 0).toLocaleString('en-US'))} كم`], ['نوع الصيانة', visit.serviceType],
+      ];
+      for (let index = 0; index < details.length; index += 2) {
+        drawBox(right - boxWidth, y, details[index][0], details[index][1]);
+        drawBox(left, y, details[index + 1][0], details[index + 1][1]);
+        y += boxHeight + gap;
+      }
+
+      if (clean(visit.notes)) {
+        doc.roundedRect(left, y, contentWidth, 56, 7).fillAndStroke('#F8FAFC', '#DDE3EC');
+        rtl('الملاحظات', left + 10, y + 7, contentWidth - 20, { size: 8, color: '#667085' });
+        rtl(visit.notes, left + 10, y + 24, contentWidth - 20, { bold: true, size: 9, lineGap: 2 });
+        y += 66;
+      }
+
+      doc.roundedRect(left, y, contentWidth, 78, 7).strokeColor('#DDE3EC').stroke();
+      doc.rect(left, y, contentWidth, 26).fill('#EEF5FF');
+      rtl('قطع الغيار المستخدمة', left + 10, y + 7, contentWidth - 20, { bold: true, size: 9 });
+      rtl(visit.partsCodes || 'لا توجد قطع غيار', left + 12, y + 37, contentWidth - 24, { bold: true, size: 10, lineGap: 3 });
+      y += 92;
+
+      const totalsWidth = 300;
+      const totalsX = left;
+      const totalRow = (label, value, isTotal = false) => {
+        doc.rect(totalsX, y, totalsWidth, 34).fillAndStroke(isTotal ? '#EDF8F3' : '#FFFFFF', '#D5DCE7');
+        rtl(label, totalsX + totalsWidth / 2, y + 10, totalsWidth / 2 - 12, { bold: isTotal, size: isTotal ? 11 : 9 });
+        rtl(value, totalsX + 10, y + 10, totalsWidth / 2 - 18, { bold: true, size: isTotal ? 12 : 10 });
+        y += 34;
+      };
+      totalRow('تكلفة قطع الغيار', money(visit.partsTotal));
+      totalRow('تكلفة المصنعية', money(visit.labor));
+      totalRow('الإجمالي', money(visit.total), true);
+
+      const footerY = Math.max(y + 24, 742);
+      doc.moveTo(left, footerY).lineTo(right, footerY).lineWidth(2).strokeColor('#F7941D').stroke();
+      rtl(`رقم التواصل: ${rtlNumber('01212891063')}`, left, footerY + 10, contentWidth, { bold: true, size: 9 });
+      rtl('العنوان: المركز الكائن كوبري قباء أسفل جسر السويس، القاهرة، مصر', left, footerY + 27, contentWidth, { size: 8 });
+      rtl('شكرًا لثقتكم في المركز الفرنسي', left, footerY + 44, contentWidth, { bold: true, size: 8, color: '#667085' });
+      doc.end();
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
 async function api(request, response, pathname, searchParams) {
   if (request.method === 'GET' && pathname === '/api/data') {
     return json(response, 200, { ...readData(), databaseFile: path.basename(DATA_FILE) });
@@ -480,6 +578,23 @@ async function api(request, response, pathname, searchParams) {
       'Content-Length': fs.statSync(DATA_FILE).size,
     });
     return fs.createReadStream(DATA_FILE).pipe(response);
+  }
+
+  if (request.method === 'GET' && pathname === '/api/visit-invoice') {
+    const code = clean(searchParams?.get('code'));
+    const data = readData();
+    const visit = data.visits.find((item) => item.code === code);
+    if (!visit) return json(response, 404, { error: 'الزيارة غير موجودة.' });
+    const customer = data.customers.find((item) => item.code === visit.customerCode) || {};
+    const buffer = await visitInvoicePdf(visit, customer);
+    const safeCode = code.replace(/[^a-z0-9_-]/gi, '') || 'visit';
+    response.writeHead(200, {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="invoice-${safeCode}.pdf"`,
+      'Content-Length': buffer.length,
+      'Cache-Control': 'no-store',
+    });
+    return response.end(buffer);
   }
 
   if (request.method === 'GET' && pathname === '/api/daily-close') {
@@ -838,3 +953,4 @@ try {
   console.error('تعذر تحديث تنسيق الأكواد داخل ملف Excel:', error.message);
 }
 server.listen(PORT, () => console.log(`نظام المركز يعمل على http://localhost:${PORT} — قاعدة البيانات: ${DATA_FILE}`));
+
