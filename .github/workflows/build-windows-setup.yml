@@ -1,0 +1,75 @@
+name: Build Windows Setup
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "server.js"
+      - "public/**"
+      - "data/main data 2.xlsx"
+      - "package.json"
+      - "package-lock.json"
+      - "start-system.bat"
+      - "start-system.vbs"
+      - "تشغيل النظام.bat"
+      - "فتح ملف البيانات.bat"
+      - "installer/**"
+      - ".github/workflows/build-windows-setup.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Download project
+        uses: actions/checkout@v4
+
+      - name: Add Node.js runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install production libraries
+        run: npm ci --omit=dev
+
+      - name: Prepare installer files
+        shell: powershell
+        run: |
+          $stage = "installer\stage"
+          New-Item -ItemType Directory -Force "$stage\runtime", "$stage\data" | Out-Null
+          Copy-Item server.js, package.json, package-lock.json, README.md, start-system.bat, start-system.vbs, "تشغيل النظام.bat", "فتح ملف البيانات.bat" $stage
+          Copy-Item public "$stage\public" -Recurse
+          Copy-Item node_modules "$stage\node_modules" -Recurse
+          Copy-Item "data\main data 2.xlsx" "$stage\data\main data 2.xlsx"
+          Copy-Item (node -p "process.execPath") "$stage\runtime\node.exe"
+
+      - name: Install Inno Setup
+        shell: powershell
+        run: choco install innosetup --yes --no-progress
+
+      - name: Build Setup
+        shell: powershell
+        run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "installer\FrenchCenter.iss"'
+
+      - name: Upload Setup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FrenchCenter-Windows-Setup
+          path: installer/output/FrenchCenter-Setup.exe
+
+      - name: Publish latest Windows installer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: powershell
+        run: |
+          gh release view windows-latest *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create windows-latest "installer\output\FrenchCenter-Setup.exe" --title "المركز الفرنسي - Windows Setup" --notes "ملف تثبيت كامل لنظام Windows 10 وWindows 11."
+          } else {
+            gh release upload windows-latest "installer\output\FrenchCenter-Setup.exe" --clobber
+          }
+
