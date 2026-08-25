@@ -194,8 +194,8 @@ function renderInventory() {
     const bLow = b.qty <= 3 ? 0 : 1;
     return aLow - bLow || a.qty - b.qty || a.name.localeCompare(b.name, 'ar');
   });
-  const rows = sortedInventory.map((item) => `<tr class="inventory-product-row ${item.qty <= 3 ? 'inventory-low-row' : ''}" data-product-code="${esc(item.code)}" tabindex="0"><td><b>${esc(item.name)}</b><br><small>${esc(item.details || '—')}</small></td><td>${esc(item.code)}</td><td>${esc(item.country || '—')}</td><td class="${item.qty <= 3 ? 'stock-danger' : 'stock-ok'}">${fmt(item.qty)}</td><td>${fmt(item.buy)} ج</td><td>${fmt(item.sell)} ج</td><td>${fmt(item.buy * item.qty)} ج</td></tr>`).join('');
-  element.innerHTML = `<div class="table-wrap"><table><thead><tr><th>المنتج</th><th>الكود</th><th>بلد المنشأ</th><th>الكمية</th><th>سعر الشراء</th><th>سعر البيع</th><th>قيمة المخزون</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  const rows = sortedInventory.map((item) => `<tr class="inventory-product-row ${item.qty <= 3 ? 'inventory-low-row' : ''}" data-product-code="${esc(item.code)}" tabindex="0"><td><b>${esc(item.name)}</b></td><td>${esc(item.code)}</td><td>${esc(item.details || '—')}</td><td>${esc(item.country || '—')}</td><td class="${item.qty <= 3 ? 'stock-danger' : 'stock-ok'}">${fmt(item.qty)}</td><td>${fmt(item.buy)} ج</td><td>${fmt(item.sell)} ج</td><td>${fmt(item.buy * item.qty)} ج</td></tr>`).join('');
+  element.innerHTML = `<div class="table-wrap"><table><thead><tr><th>المنتج</th><th>الكود</th><th>تفاصيل المنتج</th><th>بلد المنشأ</th><th>الكمية</th><th>سعر الشراء</th><th>سعر البيع</th><th>قيمة المخزون</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   $$('.inventory-product-row').forEach((row) => {
     row.addEventListener('click', () => openProductDetails(row.dataset.productCode));
     row.addEventListener('keydown', (event) => (event.key === 'Enter' || event.key === ' ') && openProductDetails(row.dataset.productCode));
@@ -347,7 +347,7 @@ function openProductDetails(code) {
   state.selectedProduct = item;
   state.productMovementMode = '';
   $('#productDetailsContent').innerHTML = `<div class="dialog-title"><span>▣</span><div><h2>${esc(item.name)}</h2><p>${esc(item.details || 'بدون تفاصيل')} · ${esc(item.code)}</p></div></div>
-    <div class="product-summary-grid"><div><small>بلد المنشأ</small><b>${esc(item.country || '—')}</b></div><div><small>الكمية الحالية</small><b>${fmt(item.qty)}</b></div><div><small>سعر الشراء</small><b>${fmt(item.buy)} ج</b></div><div><small>سعر البيع</small><b>${fmt(item.sell)} ج</b></div><div><small>المورد</small><b>${esc(item.supplier || 'غير مسجل')}</b></div><div><small>هامش الربح</small><b>${fmt(item.sell - item.buy)} ج</b></div></div>
+    <div class="product-summary-grid"><div><small>تفاصيل المنتج</small><b>${esc(item.details || '—')}</b></div><div><small>بلد المنشأ</small><b>${esc(item.country || '—')}</b></div><div><small>الكمية الحالية</small><b>${fmt(item.qty)}</b></div><div><small>سعر الشراء</small><b>${fmt(item.buy)} ج</b></div><div><small>سعر البيع</small><b>${fmt(item.sell)} ج</b></div><div><small>المورد</small><b>${esc(item.supplier || 'غير مسجل')}</b></div><div><small>هامش الربح</small><b>${fmt(item.sell - item.buy)} ج</b></div></div>
     <div class="product-detail-actions"><button id="addStockForProduct" class="primary" type="button">＋ إضافة بضاعة</button><button id="goToProductSupplier" class="secondary" type="button">اذهب إلى المورد</button></div>
     <div class="product-movement-head"><div><h3>سجل الحركة</h3><p>الوارد والصادر الخاص بهذا المنتج.</p></div><div class="product-movement-filters"><button type="button" class="inbound-filter" data-product-movement="وارد">↓ الوارد</button><button type="button" class="outbound-filter" data-product-movement="صادر">↑ الصادر</button></div></div>
     <div id="productMovementResults"></div>`;
