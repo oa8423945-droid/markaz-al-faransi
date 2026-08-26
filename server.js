@@ -135,7 +135,7 @@ function appendAccount(accounts, account) {
 function syncCustomerDebts(customers, accounts) {
   for (const customer of customers) {
     const linked = accounts.filter((account) => account.customerCode === customer.code);
-    customer.dueFromCustomer = Math.max(0, linked.reduce((sum, account) => sum + (account.direction === 'مديونية على الغير' ? account.due : account.direction === 'وارد' && account.type !== 'سداد مديونية' ? account.due : account.type === 'سداد مديونية' ? -account.paid : 0), 0));
+    customer.dueFromCustomer = Math.max(0, linked.reduce((sum, account) => sum + (account.direction === 'مديونية على الغير' ? account.due : account.direction === 'وارد' && !['سداد مديونية', 'سداد مديونية عميل'].includes(account.type) ? account.due : ['سداد مديونية', 'سداد مديونية عميل'].includes(account.type) ? -account.paid : 0), 0));
     customer.dueFromCenter = linked.reduce((sum, account) => sum + (account.direction === 'مديونية على المركز' ? account.due : 0), 0);
   }
 }
@@ -1094,7 +1094,7 @@ async function api(request, response, pathname, searchParams) {
     const amount = Math.max(0, Number(input.amount) || 0);
     const payment = paymentInfo(input, amount);
     const executionDate = clean(input.executionDate) || new Date().toISOString().slice(0, 10);
-    if (!['سحب', 'إيداع', 'دين'].includes(operation)) return json(response, 400, { error: 'اختر سحب أو إيداع أو دين.' });
+    if (!['سحب', 'إيداع', 'دين', 'دفع مستحقات'].includes(operation)) return json(response, 400, { error: 'اختر سحب أو إيداع أو دين أو دفع مستحقات.' });
     if (!type) return json(response, 400, { error: 'اكتب نوع الحركة.' });
     if (!amount) return json(response, 400, { error: 'اكتب مبلغ الحركة.' });
     if (payment.allocated > amount) return json(response, 400, { error: 'مجموع طرق الدفع أكبر من مبلغ الحركة.' });
@@ -1106,9 +1106,13 @@ async function api(request, response, pathname, searchParams) {
     const supplier = data.suppliers.find((item) => item.code === supplierKey || item.name === supplierKey) || null;
     const employee = data.employees.find((item) => item.code === employeeKey || item.name === employeeKey) || null;
     const employeeMovement = ['مرتبات', 'سلفة موظف', 'سداد سلفة موظف', 'مستحق لموظف', 'دفع مستحق موظف'].includes(type);
-    if (['سداد مديونية', 'سداد مستحقات', 'سداد سلفة موظف', 'دفع مستحق موظف', 'توريد بضاعة'].includes(type) && payment.payments.some((entry) => entry.method === 'آجل')) return json(response, 400, { error: 'هذه الحركة لا تقبل طريقة دفع آجل.' });
+    if (['سداد مديونية', 'سداد مديونية عميل', 'سداد مستحقات', 'سداد مستحقات للمورد', 'سداد سلفة موظف', 'دفع مستحق موظف', 'توريد بضاعة'].includes(type) && payment.payments.some((entry) => entry.method === 'آجل')) return json(response, 400, { error: 'هذه الحركة لا تقبل طريقة دفع آجل.' });
     if (type === 'سداد مديونية' && !customer) return json(response, 400, { error: 'اختر العميل قبل سداد مديونيته.' });
     if (type === 'سداد مديونية' && amount > customer.dueFromCustomer) return json(response, 400, { error: `المبلغ أكبر من مديونية العميل (${customer.dueFromCustomer}).` });
+    if (type === 'سداد مديونية عميل' && !customer) return json(response, 400, { error: 'اختر العميل قبل سداد مديونيته.' });
+    if (type === 'سداد مديونية عميل' && amount > customer.dueFromCustomer) return json(response, 400, { error: `المبلغ أكبر من مديونية العميل (${customer.dueFromCustomer}).` });
+    if (type === 'سداد مستحقات للمورد' && !supplier) return json(response, 400, { error: 'اختر المورد قبل سداد مستحقاته.' });
+    if (type === 'سداد مستحقات للمورد' && amount > supplier.due) return json(response, 400, { error: `المبلغ أكبر من مستحقات المورد (${supplier.due}).` });
     if (employeeMovement && !employee) return json(response, 400, { error: 'اختر الموظف المرتبط بالحركة.' });
     if (type === 'مرتبات' && employee.status && employee.status !== 'يعمل') return json(response, 400, { error: 'لا يمكن صرف مرتب لموظف موقوف عن العمل.' });
     if (type === 'سداد سلفة موظف' && amount > employee.debtOnEmployee) return json(response, 400, { error: `المبلغ أكبر من السلفة المتبقية على الموظف (${employee.debtOnEmployee}).` });
@@ -1116,7 +1120,7 @@ async function api(request, response, pathname, searchParams) {
     const debtSide = clean(input.debtSide);
     if (operation === 'دين' && !customer) return json(response, 400, { error: 'اختر العميل المرتبط بالدين.' });
     if (operation === 'دين' && !['على العميل', 'على المركز'].includes(debtSide)) return json(response, 400, { error: 'حدد هل الدين على العميل أم على المركز.' });
-    let direction = operation === 'سحب' ? 'صادر' : operation === 'إيداع' ? 'وارد' : debtSide === 'على العميل' ? 'مديونية على الغير' : 'مديونية على المركز';
+    let direction = operation === 'سحب' ? 'صادر' : operation === 'إيداع' ? 'وارد' : operation === 'دفع مستحقات' ? (type === 'سداد مستحقات للمورد' ? 'صادر' : 'وارد') : debtSide === 'على العميل' ? 'مديونية على الغير' : 'مديونية على المركز';
     if (type === 'سلفة موظف' || type === 'دفع مستحق موظف') direction = 'صادر';
     if (type === 'مرتبات') direction = 'صادر';
     if (type === 'سداد سلفة موظف') direction = 'وارد';
@@ -1125,6 +1129,7 @@ async function api(request, response, pathname, searchParams) {
     if (type === 'سداد سلفة موظف') employee.debtOnEmployee = Math.max(0, employee.debtOnEmployee - amount);
     if (type === 'مستحق لموظف') employee.dueToEmployee += amount;
     if (type === 'دفع مستحق موظف') employee.dueToEmployee = Math.max(0, employee.dueToEmployee - amount);
+    if (type === 'سداد مستحقات للمورد') { supplier.due = Math.max(0, supplier.due - amount); supplier.paid += amount; supplier.paymentDate = executionDate; }
     const account = { code: nextCode(data.accounts.map((item) => item.code), 'T'), date: new Date().toISOString().slice(0, 10),
       executionDate, direction, type: operation === 'دين' ? `دين ${debtSide}` : type, description: clean(input.description) || type,
       customerCode: employeeMovement ? '' : (customer?.code || ''), customerName: employeeMovement ? '' : (customer?.name || ''), visitCode: '',
@@ -1133,7 +1138,7 @@ async function api(request, response, pathname, searchParams) {
       productCode: '', productName: '', qty: 0, total: amount, paid: operation === 'دين' ? 0 : payment.paid, due: operation === 'دين' ? amount : amount - payment.paid,
       paymentMethod: operation === 'دين' ? 'آجل' : payment.paymentMethod, paymentDetails: operation === 'دين' ? `آجل: ${amount}` : payment.paymentDetails, notes: clean(input.notes) };
     appendAccount(data.accounts, account);
-    saveData(data.customers, data.visits, null, null, null, data.accounts, data.employees);
+    saveData(data.customers, data.visits, null, supplier ? data.suppliers : null, null, data.accounts, data.employees);
     return json(response, 201, account);
   }
 
