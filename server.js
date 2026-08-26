@@ -53,7 +53,7 @@ function currentTime() {
 
 // PDFKit يعكس أقواس الإنجليزي وسط النص العربي؛ نحول محتواها إلى جزء واضح بين شرطات.
 function pdfRtlText(doc, text, x, y, width, options = {}) {
-  const value = String(text ?? '').replace(/\(([^()]*)\)/g, ' — $1 — ').replace(/\s*—\s*—\s*/g, ' — ').replace(/\s+/g, '\u00A0');
+  const value = String(text ?? '').replace(/\(([^()]*)\)/g, ' — $1 — ').replace(/\s*—\s*—\s*/g, ' — ').replace(/(\d{4}-\d{2}-\d{2})/g, '\u202A$1\u202C').replace(/\s+/g, '\u00A0');
   const style = () => doc.font(options.bold ? 'ArabicBold' : 'Arabic').fontSize(options.size || 9).fillColor(options.color || '#111827');
   style().text(value, x, y, { width, align: 'right', lineGap: options.lineGap || 0 });
 }
