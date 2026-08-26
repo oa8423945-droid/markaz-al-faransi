@@ -10,6 +10,9 @@ if exist "garage-server.pid" (
   del /q "garage-server.pid" >nul 2>nul
 )
 
+rem عند تحديث البرنامج قد تكون النسخة السابقة لا تملك ملف PID؛ أوقف فقط العملية التي تستخدم منفذ النظام.
+for /f "tokens=5" %%P in ('netstat -ano ^| findstr /R /C:":3210 .*LISTENING"') do taskkill /PID %%P /T /F >nul 2>nul
+
 if exist "runtime\node.exe" (
   set "GARAGE_NODE=%CD%\runtime\node.exe"
 ) else (
@@ -26,9 +29,10 @@ if not exist "node_modules\xlsx" (
   if errorlevel 1 goto install_failed
 )
 
+start "" /b "%GARAGE_NODE%" server.js french-center-garage
+ping 127.0.0.1 -n 3 >nul
 start "" http://localhost:3210
-"%GARAGE_NODE%" server.js french-center-garage
-exit /b %errorlevel%
+exit /b 0
 
 :missing_data
 echo The database file data\main data 2.xlsx was not found.
