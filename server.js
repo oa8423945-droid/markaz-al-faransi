@@ -1098,7 +1098,7 @@ async function api(request, response, pathname, searchParams) {
       if (supplier) item.supplier = supplier.name;
       item.paid = Number(item.paid || 0) + paid; item.due = Number(item.due || 0) + due;
       if (supplier) { supplier.paid += paid; supplier.due += due; supplier.paymentDate = paid ? today : supplier.paymentDate; }
-      const movement = { code: nextCode(data.movements.map((entry) => entry.code), 'M'), date: today, type: 'وارد',
+      const movement = { code: nextCode(data.movements.map((entry) => entry.code), 'M'), date: today, time: currentTime(), type: 'وارد',
         productCode: item.code, productName: item.name, details: item.details, country: item.country, qty,
         unitPrice: buy, total, visitCode: '', customerCode: '', supplier: supplier?.name || '', notes: 'توريد بضاعة من قسم الموردين' };
       const account = { code: nextCode(data.accounts.map((entry) => entry.code), 'A'), date: today, executionDate: today, direction: 'صادر', type,
@@ -1205,7 +1205,7 @@ async function api(request, response, pathname, searchParams) {
       item.due = Number(item.due || 0) + due;
     } else return json(response, 400, { error: 'اختر منتجًا جديدًا أو قديمًا.' });
     const movement = {
-      code: nextCode(data.movements.map((entry) => entry.code), 'M'), date: new Date().toISOString().slice(0, 10),
+      code: nextCode(data.movements.map((entry) => entry.code), 'M'), date: new Date().toISOString().slice(0, 10), time: currentTime(),
       type: 'وارد', productCode: item.code, productName: item.name, details: item.details, country: item.country,
       qty, unitPrice: buy, total: purchaseTotal, visitCode: '', customerCode: '', supplier: supplierName || item.supplier,
       notes: mode === 'new' ? 'إضافة منتج جديد' : 'إضافة كمية لمنتج قديم',
