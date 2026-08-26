@@ -960,7 +960,8 @@ function renderReports() {
   }));
 }
 
-function openInventoryMovementsReport() {
+function openInventoryMovementsReportLegacy() {
+  // يعرض سجل الحركات داخل الصفحة بجانب خيارات التنزيل.
   const view = $('#inventoryAuditView'); view.classList.remove('hidden'); const today = new Date().toISOString().slice(0,10); const url = (format) => `/api/inventory-movements-report?from=${today}&to=${today}&format=${format}`;
   view.innerHTML = `<div class="statement-head"><div><h2>جرد حركة المخزن</h2><p>الصادر والوارد خلال الفترة المحددة.</p></div><details class="download-menu"><summary>تنزيل التقرير</summary><div><a class="movement-report-pdf" href="${url('pdf')}" download>تنزيل PDF</a><a class="movement-report-xlsx" href="${url('xlsx')}" download>تنزيل Excel</a></div></details></div><div class="financial-period-tabs"><button type="button" data-movement-period="daily">يومي</button><button type="button" data-movement-period="weekly">أسبوعي</button><button type="button" data-movement-period="monthly">شهري</button><button type="button" data-movement-period="quarterly">ربع سنوي</button><button type="button" data-movement-period="halfyear">نصف سنوي</button><button type="button" data-movement-period="yearly">سنوي</button><label>من <input id="movementReportFrom" type="date" value="${today}"></label><label>إلى <input id="movementReportTo" type="date" value="${today}"></label></div><div class="empty-state compact-empty">اختر الفترة ثم نزّل التقرير بصيغة PDF أو Excel.</div>`;
   const refresh = () => { const from=$('#movementReportFrom').value, to=$('#movementReportTo').value; view.querySelector('.movement-report-pdf').href=`/api/inventory-movements-report?from=${from}&to=${to}&format=pdf`; view.querySelector('.movement-report-xlsx').href=`/api/inventory-movements-report?from=${from}&to=${to}&format=xlsx`; };
@@ -968,7 +969,20 @@ function openInventoryMovementsReport() {
   ['movementReportFrom','movementReportTo'].forEach((id) => $(`#${id}`).addEventListener('change', refresh)); view.scrollIntoView({behavior:'smooth',block:'start'});
 }
 
-function openInventoryAuditReport() {
+function openInventoryMovementsReport() {
+  openInventoryMovementsReportLegacy();
+  const view = $('#inventoryAuditView');
+  const movementDates = $('#movementReportFrom')?.closest('.financial-period-tabs');
+  movementDates?.classList.add('report-period-shell');
+  movementDates?.querySelectorAll('label').forEach((label) => label.classList.add('hidden'));
+  movementDates?.querySelector('[data-movement-period="custom"]')?.addEventListener('click', (event) => { event.currentTarget.classList.add('active'); movementDates.querySelectorAll('label').forEach((label) => label.classList.remove('hidden')); });
+  const from = $('#movementReportFrom')?.value || ''; const to = $('#movementReportTo')?.value || '';
+  const rows = state.movements.filter((m) => (!from || m.date >= from) && (!to || m.date <= to)).map((m) => `<tr><td>${esc(m.date || '—')}</td><td>${esc(m.productName || '—')}</td><td class="movement-${m.type === 'صادر' ? 'out' : 'in'}">${esc(m.type || '—')}</td><td><b>${esc(m.code || '—')}</b></td><td>${fmt(m.qty)}</td></tr>`).join('');
+  const empty = view.querySelector('.empty-state');
+  if (empty) empty.outerHTML = `<div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>البيان</th><th>نوع الحركة</th><th>كود الحركة</th><th>الكمية</th></tr></thead><tbody>${rows || '<tr><td colspan="5">لا توجد حركات.</td></tr>'}</tbody></table></div>`;
+}
+
+function openInventoryAuditReportLegacy() {
   const from = $('#inventoryAuditFrom')?.value || '';
   const to = $('#inventoryAuditTo')?.value || '';
   const rows = state.inventory.map((item) => ({ code: item.code || '—', statement: [item.name, item.details].filter(Boolean).join(' — ') || '—', quantity: Number(item.qty) || 0, value: (Number(item.qty) || 0) * (Number(item.buy) || 0) }));
@@ -979,6 +993,18 @@ function openInventoryAuditReport() {
   view.innerHTML = `<div class="statement-head"><div><h2>جرد المخزن</h2><p>اختر مدة الجرد من وإلى، أو اتركها فارغة للجرد الحالي.</p></div><details class="download-menu"><summary>تنزيل الجرد</summary><div><a href="/api/inventory-audit?${query}&format=pdf" download>تنزيل PDF</a><a href="/api/inventory-audit?${query}&format=xlsx" download>تنزيل Excel</a></div></details></div><div class="report-date-range"><label>من <input id="inventoryAuditFrom" type="date" value="${esc(from)}"></label><label>إلى <input id="inventoryAuditTo" type="date" value="${esc(to)}"></label><button class="button secondary" id="inventoryAuditApply">تطبيق المدة</button></div><div class="table-wrap"><table><thead><tr><th>كود المنتج</th><th>البيان</th><th>الكمية الحالية</th><th>قيمة المخزون</th></tr></thead><tbody>${rows.map((item) => `<tr><td><b>${esc(item.code)}</b></td><td>${esc(item.statement)}</td><td>${fmt(item.quantity)}</td><td class="money-value">${fmt(item.value)} ج</td></tr>`).join('') || '<tr><td colspan="4">لا توجد أصناف في المخزن.</td></tr>'}<tr class="supplier-debt-total"><td colspan="2"><b>إجمالي الأصناف المختلفة: ${fmt(rows.length)}</b></td><td colspan="2"><b>إجمالي قيمة البضاعة: ${fmt(total)} ج</b></td></tr></tbody></table></div>`;
   $('#inventoryAuditApply').addEventListener('click', openInventoryAuditReport);
   view.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function openInventoryAuditReport() {
+  openInventoryAuditReportLegacy();
+  const view = $('#inventoryAuditView');
+  if (!$('#inventoryAuditFrom')?.value && !$('#inventoryAuditTo')?.value) view.querySelector('.report-date-range')?.classList.add('hidden');
+  if (!view.querySelector('.inventory-audit-period-tabs')) {
+    const tabs = document.createElement('div'); tabs.className = 'financial-period-tabs inventory-audit-period-tabs';
+    tabs.innerHTML = '<button type="button" data-audit-period="current">المخزون الحالي</button><button type="button" data-audit-period="daily">يومي</button><button type="button" data-audit-period="weekly">أسبوعي</button><button type="button" data-audit-period="monthly">شهري</button><button type="button" data-audit-period="quarterly">ربع سنوي</button><button type="button" data-audit-period="halfyear">نصف سنوي</button><button type="button" data-audit-period="yearly">سنوي</button><button type="button" data-audit-period="custom">مدة مخصصة</button>';
+    view.prepend(tabs);
+    tabs.querySelectorAll('[data-audit-period]').forEach((b) => b.onclick = () => { tabs.querySelectorAll('button').forEach((x) => x.classList.remove('active')); b.classList.add('active'); if (b.dataset.auditPeriod === 'current') { $('#inventoryAuditFrom').value=''; $('#inventoryAuditTo').value=''; openInventoryAuditReport(); return; } if (b.dataset.auditPeriod === 'custom') { view.querySelector('.report-date-range')?.classList.remove('hidden'); return; } const end=new Date(), start=new Date(end); const p=b.dataset.auditPeriod; if(p==='weekly') start.setDate(end.getDate()-6); else if(p==='monthly') start.setDate(1); else if(p==='quarterly') start.setMonth(Math.floor(end.getMonth()/3)*3,1); else if(p==='halfyear') start.setMonth(end.getMonth()<6?0:6,1); else if(p==='yearly') start.setMonth(0,1); $('#inventoryAuditFrom').value=start.toISOString().slice(0,10); $('#inventoryAuditTo').value=end.toISOString().slice(0,10); openInventoryAuditReport(); });
+  }
 }
 
 function openExternalDebtsReport() {
