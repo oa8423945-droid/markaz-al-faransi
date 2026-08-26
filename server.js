@@ -580,7 +580,12 @@ function supplierDebtsPdf(data) {
   } catch (error) { reject(error); } });
 }
 
-function inventoryAuditRows(data) {
+function inventoryAuditRows(data, from = '', to = '') {
+  if (from || to) {
+    const totals = new Map();
+    (data.movements || []).filter((m) => (!from || m.date >= from) && (!to || m.date <= to)).forEach((m) => { const item = (data.inventory || []).find((i) => i.code === m.productCode); if (!item) return; const current = totals.get(item.code) || { item, quantity: 0 }; current.quantity += m.type === 'صادر' ? -Number(m.qty || 0) : Number(m.qty || 0); totals.set(item.code, current); });
+    return [...totals.values()].map(({ item, quantity }) => ({ code: clean(item.code) || '—', statement: [clean(item.name), clean(item.details)].filter(Boolean).join(' — ') || '—', quantity: Math.max(0, quantity), value: Math.max(0, quantity) * (Number(item.buy) || 0) })).filter((r) => r.quantity > 0);
+  }
   return (data.inventory || []).map((item) => {
     const quantity = Number(item.qty) || 0;
     const unitCost = Number(item.buy) || 0;
@@ -607,8 +612,8 @@ async function inventoryMovementsWorkbook(data, from, to) {
 
 function inventoryMovementsPdf(data, from, to) { return new Promise((resolve, reject) => { try { const rows=inventoryMovementRows(data,from,to); const doc=new PDFDocument({size:'A4',margins:{top:38,right:32,bottom:40,left:32},bufferPages:true}); const chunks=[]; doc.on('data',c=>chunks.push(c)); doc.on('end',()=>resolve(Buffer.concat(chunks))); doc.on('error',reject); const fonts=path.join(process.env.WINDIR||'C:\\Windows','Fonts'); const regular=['tahoma.ttf','arial.ttf'].map(n=>path.join(fonts,n)).find(fs.existsSync); const bold=['tahomabd.ttf','arialbd.ttf'].map(n=>path.join(fonts,n)).find(fs.existsSync); if(!regular||!bold) throw new Error('تعذر العثور على خط عربي مناسب.'); doc.registerFont('Arabic',regular);doc.registerFont('ArabicBold',bold); const rtl=(t,x,y,w,o={})=>pdfRtlText(doc,t,x,y,w,o); const cols=[55,55,55,65,70,130,45,60,55,55]; const labels=['كود المورد','كود العميل','المبلغ','الكمية','بيان المنتج','كود المنتج','نوع الحركة','الوقت','اليوم','كود الحركة']; const left=25; let y=48; rtl('تقرير جرد حركة المخزن',left,y,545,{bold:true,size:19}); rtl(`الفترة: ${from} إلى ${to}`,left,y+28,545,{size:9,color:'#667085'}); y+=58; const head=()=>{let x=left; labels.forEach((l,i)=>{doc.rect(x,y,cols[i],28).fillAndStroke('#FFD966','#D9A900');rtl(l,x+2,y+8,cols[i]-4,{bold:true,size:6});x+=cols[i]});y+=28}; const row=(vals)=>{if(y>760){doc.addPage();y=48;head()}let x=left;vals.forEach((v,i)=>{doc.rect(x,y,cols[i],25).fillAndStroke('#fff','#e5e7eb');rtl(v,x+2,y+7,cols[i]-4,{size:6});x+=cols[i]});y+=25}; head(); rows.forEach(r=>row([r.supplierCode,r.customerCode,r.amount,r.qty,r.productName,r.productCode,r.direction,r.time,r.date,r.code])); doc.end(); } catch(e){reject(e);} }); }
 
-async function inventoryAuditWorkbook(data) {
-  const rows = inventoryAuditRows(data);
+async function inventoryAuditWorkbook(data, from = '', to = '') {
+  const rows = inventoryAuditRows(data, from, to);
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'المركز الفرنسي'; workbook.created = new Date();
   const sheet = workbook.addWorksheet('جرد المخزن', { views: [{ rightToLeft: true, showGridLines: true }] });
@@ -625,9 +630,9 @@ async function inventoryAuditWorkbook(data) {
   return Buffer.from(await workbook.xlsx.writeBuffer());
 }
 
-function inventoryAuditPdf(data) {
+function inventoryAuditPdf(data, from = '', to = '') {
   return new Promise((resolve, reject) => { try {
-    const rows = inventoryAuditRows(data);
+    const rows = inventoryAuditRows(data, from, to);
     const doc = new PDFDocument({ size: 'A4', margins: { top: 38, right: 40, bottom: 46, left: 40 }, bufferPages: true });
     const chunks = []; doc.on('data', (chunk) => chunks.push(chunk)); doc.on('end', () => resolve(Buffer.concat(chunks))); doc.on('error', reject);
     const fonts = path.join(process.env.WINDIR || 'C:\\Windows', 'Fonts');
@@ -894,13 +899,14 @@ async function api(request, response, pathname, searchParams) {
 
   if (request.method === 'GET' && pathname === '/api/inventory-audit') {
     const format = clean(searchParams?.get('format')) || 'xlsx';
+    const from = clean(searchParams?.get('from')) || ''; const to = clean(searchParams?.get('to')) || '';
     const data = readData();
     if (format === 'pdf') {
-      const buffer = await inventoryAuditPdf(data);
+      const buffer = await inventoryAuditPdf(data, from, to);
       response.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="inventory-audit.pdf"', 'Content-Length': buffer.length, 'Cache-Control': 'no-store' });
       return response.end(buffer);
     }
-    const buffer = await inventoryAuditWorkbook(data);
+    const buffer = await inventoryAuditWorkbook(data, from, to);
     response.writeHead(200, { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Content-Disposition': 'attachment; filename="inventory-audit.xlsx"', 'Content-Length': buffer.length, 'Cache-Control': 'no-store' });
     return response.end(buffer);
   }
@@ -1264,4 +1270,3 @@ try {
   console.error('تعذر تحديث تنسيق الأكواد داخل ملف Excel:', error.message);
 }
 server.listen(PORT, () => console.log(`نظام المركز يعمل على http://localhost:${PORT} — قاعدة البيانات: ${DATA_FILE}`));
-
