@@ -612,6 +612,33 @@ async function inventoryMovementsWorkbook(data, from, to) {
 
 function inventoryMovementsPdf(data, from, to) { return new Promise((resolve, reject) => { try { const rows=inventoryMovementRows(data,from,to); const doc=new PDFDocument({size:'A4',margins:{top:38,right:32,bottom:40,left:32},bufferPages:true}); const chunks=[]; doc.on('data',c=>chunks.push(c)); doc.on('end',()=>resolve(Buffer.concat(chunks))); doc.on('error',reject); const fonts=path.join(process.env.WINDIR||'C:\\Windows','Fonts'); const regular=['tahoma.ttf','arial.ttf'].map(n=>path.join(fonts,n)).find(fs.existsSync); const bold=['tahomabd.ttf','arialbd.ttf'].map(n=>path.join(fonts,n)).find(fs.existsSync); if(!regular||!bold) throw new Error('تعذر العثور على خط عربي مناسب.'); doc.registerFont('Arabic',regular);doc.registerFont('ArabicBold',bold); const rtl=(t,x,y,w,o={})=>pdfRtlText(doc,t,x,y,w,o); const cols=[55,55,55,65,70,130,45,60,55,55]; const labels=['كود المورد','كود العميل','المبلغ','الكمية','بيان المنتج','كود المنتج','نوع الحركة','الوقت','اليوم','كود الحركة']; const left=25; let y=48; rtl('تقرير جرد حركة المخزن',left,y,545,{bold:true,size:19}); rtl(`الفترة: ${from} إلى ${to}`,left,y+28,545,{size:9,color:'#667085'}); y+=58; const head=()=>{let x=left; labels.forEach((l,i)=>{doc.rect(x,y,cols[i],28).fillAndStroke('#FFD966','#D9A900');rtl(l,x+2,y+8,cols[i]-4,{bold:true,size:6});x+=cols[i]});y+=28}; const row=(vals)=>{if(y>760){doc.addPage();y=48;head()}let x=left;vals.forEach((v,i)=>{doc.rect(x,y,cols[i],25).fillAndStroke('#fff','#e5e7eb');rtl(v,x+2,y+7,cols[i]-4,{size:6});x+=cols[i]});y+=25}; head(); rows.forEach(r=>row([r.supplierCode,r.customerCode,r.amount,r.qty,r.productName,r.productCode,r.direction,r.time,r.date,r.code])); doc.end(); } catch(e){reject(e);} }); }
 
+// نسخة PDF واضحة لتقرير حركة المخزن
+function inventoryMovementsPdf(data, from, to) {
+  return new Promise((resolve, reject) => {
+    try {
+      const rows = inventoryMovementRows(data, from, to);
+      const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margins: { top: 34, right: 28, bottom: 34, left: 28 } });
+      const chunks = []; doc.on('data', (chunk) => chunks.push(chunk)); doc.on('end', () => resolve(Buffer.concat(chunks))); doc.on('error', reject);
+      const fonts = path.join(process.env.WINDIR || 'C:\\Windows', 'Fonts');
+      const regular = ['tahoma.ttf', 'arial.ttf'].map((name) => path.join(fonts, name)).find(fs.existsSync);
+      const bold = ['tahomabd.ttf', 'arialbd.ttf'].map((name) => path.join(fonts, name)).find(fs.existsSync);
+      if (!regular || !bold) throw new Error('تعذر العثور على خط عربي مناسب.');
+      doc.registerFont('Arabic', regular); doc.registerFont('ArabicBold', bold);
+      const text = (value, x, y, width, options = {}) => pdfRtlText(doc, value, x, y, width, options);
+      const left = 28; const widths = [72, 82, 88, 102, 72, 62, 62, 62, 72, 72];
+      const headers = ['كود الحركة', 'التاريخ', 'الوقت', 'بيان المنتج', 'كود المنتج', 'الكمية', 'المبلغ', 'نوع الحركة', 'كود العميل', 'كود المورد'];
+      let y = 36;
+      text('تقرير جرد حركة المخزن', left, y, 785, { bold: true, size: 20 });
+      text(`الفترة من ${from || 'بداية السجل'} إلى ${to || 'اليوم'}`, left, y + 30, 785, { size: 11, color: '#475467' });
+      y += 58;
+      const header = () => { let x = left; headers.forEach((label, index) => { doc.rect(x, y, widths[index], 28).fillAndStroke('#FFD966', '#D4A700'); text(label, x + 3, y + 8, widths[index] - 6, { bold: true, size: 7 }); x += widths[index]; }); y += 28; };
+      const row = (item) => { if (y > 540) { doc.addPage(); y = 36; header(); } const color = item.direction === 'صادر' ? '#FEE2E2' : '#DCFCE7'; const border = item.direction === 'صادر' ? '#FCA5A5' : '#86EFAC'; const values = [item.code, item.date, item.time || 'غير مسجل', item.productName, item.productCode, String(item.qty), `${item.amount} ج`, item.direction, item.customerCode, item.supplierCode]; let x = left; values.forEach((value, index) => { doc.rect(x, y, widths[index], 26).fillAndStroke(color, border); text(value, x + 3, y + 8, widths[index] - 6, { size: 7, bold: index === 1 || index === 7 }); x += widths[index]; }); y += 26; };
+      header(); rows.forEach(row); if (!rows.length) text('لا توجد حركات في المدة المحددة.', left, y + 16, 785, { size: 12 });
+      doc.end();
+    } catch (error) { reject(error); }
+  });
+}
+
 async function inventoryAuditWorkbook(data, from = '', to = '') {
   const rows = inventoryAuditRows(data, from, to);
   const workbook = new ExcelJS.Workbook();
