@@ -1,5 +1,5 @@
-Warning: truncated output (original token count: 32038)
-Total output lines: 1371
+Warning: truncated output (original token count: 32769)
+Total output lines: 1380
 
 const state = { customers: [], visits: [], inventory: [], suppliers: [], employees: [], expenses: [], movements: [], accounts: [], selectedCustomer: null, movementMode: '', selectedProduct: null, productMovementMode: '', selectedSupplierName: '' };
 const $ = (selector) => document.querySelector(selector);
@@ -798,42 +798,7 @@ function installEmployeesUI() {
   page.innerHTML = `<div class="page-title"><div><span class="eyebrow">فريق العمل</span><h1>الموظفين</h1><p>بيانات الموظفين ورواتبهم وأرصدتهم المالية.</p></div><div class="employee-page-actions"><button id="addEmployeeButton" class="primary" type="button">＋ إضافة موظف</button><button id="stoppedEmployeesButton" class="secondary" type="button">الموقوفين عن العمل</button></div></div><div id="activeEmployeesView" class="panel"><div class="panel-head"><div><h2>الموظفين العاملين</h2><p id="employeesCount"></p></div></div><div id="employeesTable"></div></div><div id="stoppedEmployeesView" class="panel hidden"><div class="panel-head"><div><h2>الموقوفين عن العمل</h2><p id="stoppedEmployeesCount"></p></div><button id="activeEmployeesBack" class="back-btn" type="button">→ رجوع للعاملين</button></div><div id="stoppedEmployeesTable"></div></div>`;
   $('main').appendChild(page);
   const addDialog = document.createElement('dialog'); addDialog.id = 'employeeAddDialog';
-  addDialog.innerHTML = `<form id="employeeAddForm"><…2038 tokens truncated…لية للموظف.</div>'}`;
-  $('#stopEmployeeButton')?.addEventListener('click', () => openEmployeeStatusDialog(employee));
-  $('#reactivateEmployeeButton')?.addEventListener('click', () => reactivateEmployee(employee.code));
-  $$('#employeeDetailsContent .account-row').forEach((row) => row.addEventListener('click', () => { $('#employeeDetailsDialog').close(); showAccountDetails(row.dataset.accountCode); }));
-  $('#employeeDetailsDialog').showModal();
-}
-
-function openEmployeeStatusDialog(employee) {
-  $('#employeeDetailsDialog').close(); const form = $('#employeeStatusForm'); form.reset(); form.elements.employeeCode.value = employee.code; form.elements.stopDate.value = new Date().toISOString().slice(0,10); $('#employeeStatusName').textContent = `${employee.name} — ${employee.code}`; $('#employeeStatusDialog').showModal();
-}
-
-async function submitEmployeeStatus(event) {
-  event.preventDefault();
-  try { const input = Object.fromEntries(new FormData(event.currentTarget)); await request('/api/employees/status', { method: 'POST', body: JSON.stringify(input) }); $('#employeeStatusDialog').close(); await load(); showStoppedEmployees(); toast('تم نقل الموظف إلى الموقوفين عن العمل.'); }
-  catch (error) { toast(error.message, true); }
-}
-
-async function reactivateEmployee(code) {
-  try { await request('/api/employees/status', { method: 'POST', body: JSON.stringify({ employeeCode: code, status: 'يعمل', reason: '' }) }); $('#employeeDetailsDialog').close(); await load(); showActiveEmployees(); toast('تمت إعادة الموظف للعمل.'); }
-  catch (error) { toast(error.message, true); }
-}
-
-async function submitEmployee(event) {
-  event.preventDefault();
-  try { const employee = await request('/api/employees', { method: 'POST', body: JSON.stringify(Object.fromEntries(new FormData(event.currentTarget))) }); $('#employeeAddDialog').close(); await load(); renderEmployees(); toast(`تم إضافة الموظف ${employee.name} — ${employee.code}`); }
-  catch (error) { toast(error.message, true); }
-}
-
-function installAccountsUI() {
-  const supplierNav = $('.nav-btn[data-page="suppliers"]');
-  const nav = document.createElement('button');
-  nav.type = 'button'; nav.className = 'nav-btn'; nav.dataset.page = 'accounts'; nav.innerHTML = '<span>ج</span> الحسابات';
-  supplierNav.after(nav);
-  const page = document.createElement('section');
-  page.id = 'accounts'; page.className = 'page';
-  page.innerHTML = `<div class="page-title"><div><span class="eyebrow">الحركة المالية</span><h1>الحسابات</h1><p>سجل كل الحركات المالية الواردة والصادرة.</p></div><button id="addManualAccountButton" class="primary" type="button">＋ تسجيل حركة</button></div><div class="panel"><div class="panel-head"><div><h2>الحركات المالية</h2><p id="accountsCount"></p></div></div><div id="accountsTable"></div></div>`;
+  addDialog.innerHTML = `<form id="employeeAddForm"><…2769 tokens truncated…ountsTable"></div></div>`;
   $('main').appendChild(page);
   const accountActions = document.createElement('div');
   accountActions.className = 'account-page-actions';
@@ -909,12 +874,21 @@ function installReportsUI() {
 
 function renderReports() {
   const productCount = state.inventory.length;
-  $('#reportsContent').innerHTML = `<div class="reports-grid"><button class="report-card" type="button" data-report="daily"><span>▤</span><b>قفل اليومية</b><small>ملخص الوارد والصادر وقطع الغيار المستخدمة.</small></button><button class="report-card" type="button" data-report="statement"><span>☷</span><b>كشف الحساب</b><small>كل الحركات المالية مع الرصيد بعد كل عملية.</small></button><button class="report-card" type="button" data-report="supplierDebts"><span>₪</span><b>ديون الموردين</b><small>المدفوع والمتبقي لكل مورد.</small></button><button class="report-card" type="button" data-report="externalDebts"><span>◉</span><b>الديون الخارجية للمركز</b><small>المبالغ المستحقة على العملاء والموظفين والجهات الأخرى.</small></button><button class="report-card" type="button" data-report="inventory"><span>▦</span><b>جرد المخزن</b><small>${fmt(productCount)} صنف مختلف وقيمة المخزون الحالية.</small></button></div><div id="inventoryAuditView" class="financial-report-section hidden"></div>`;
+  $('#reportsContent').innerHTML = `<div class="reports-grid"><button class="report-card" type="button" data-report="daily"><span>▤</span><b>قفل اليومية</b><small>ملخص الوارد والصادر وقطع الغيار المستخدمة.</small></button><button class="report-card" type="button" data-report="statement"><span>☷</span><b>كشف الحساب</b><small>كل الحركات المالية مع الرصيد بعد كل عملية.</small></button><button class="report-card" type="button" data-report="supplierDebts"><span>₪</span><b>ديون الموردين</b><small>المدفوع والمتبقي لكل مورد.</small></button><button class="report-card" type="button" data-report="externalDebts"><span>◉</span><b>الديون الخارجية للمركز</b><small>المبالغ المستحقة على العملاء والموظفين والجهات الأخرى.</small></button><button class="report-card" type="button" data-report="inventory"><span>▦</span><b>جرد المخزن</b><small>${fmt(productCount)} صنف مختلف وقيمة المخزون الحالية.</small></button><button class="report-card" type="button" data-report="inventoryMovements"><span>↕</span><b>جرد حركة المخزن</b><small>الصادر والوارد بالكميات والأكواد والتاريخ والمبلغ.</small></button></div><div id="inventoryAuditView" class="financial-report-section hidden"></div>`;
   $$('#reportsContent [data-report]').forEach((button) => button.addEventListener('click', () => {
     if (button.dataset.report === 'inventory') return openInventoryAuditReport();
+    if (button.dataset.report === 'inventoryMovements') return openInventoryMovementsReport();
     if (button.dataset.report === 'externalDebts') return openExternalDebtsReport();
     openFinancialReport(button.dataset.report);
   }));
+}
+
+function openInventoryMovementsReport() {
+  const view = $('#inventoryAuditView'); view.classList.remove('hidden'); const today = new Date().toISOString().slice(0,10); const url = (format) => `/api/inventory-movements-report?from=${today}&to=${today}&format=${format}`;
+  view.innerHTML = `<div class="statement-head"><div><h2>جرد حركة المخزن</h2><p>الصادر والوارد خلال الفترة المحددة.</p></div><details class="download-menu"><summary>تنزيل التقرير</summary><div><a class="movement-report-pdf" href="${url('pdf')}" download>تنزيل PDF</a><a class="movement-report-xlsx" href="${url('xlsx')}" download>تنزيل Excel</a></div></details></div><div class="financial-period-tabs"><button type="button" data-movement-period="daily">يومي</button><button type="button" data-movement-period="weekly">أسبوعي</button><button type="button" data-movement-period="monthly">شهري</button><button type="button" data-movement-period="quarterly">ربع سنوي</button><button type="button" data-movement-period="halfyear">نصف سنوي</button><button type="button" data-movement-period="yearly">سنوي</button><label>من <input id="movementReportFrom" type="date" value="${today}"></label><label>إلى <input id="movementReportTo" type="date" value="${today}"></label></div><div class="empty-state compact-empty">اختر الفترة ثم نزّل التقرير بصيغة PDF أو Excel.</div>`;
+  const refresh = () => { const from=$('#movementReportFrom').value, to=$('#movementReportTo').value; view.querySelector('.movement-report-pdf').href=`/api/inventory-movements-report?from=${from}&to=${to}&format=pdf`; view.querySelector('.movement-report-xlsx').href=`/api/inventory-movements-report?from=${from}&to=${to}&format=xlsx`; };
+  view.querySelectorAll('[data-movement-period]').forEach((button) => button.addEventListener('click', () => { const end=new Date(); const start=new Date(end); const p=button.dataset.movementPeriod; if(p==='weekly') start.setDate(end.getDate()-6); else if(p==='monthly') start.setDate(1); else if(p==='quarterly') start.setMonth(Math.floor(end.getMonth()/3)*3,1); else if(p==='halfyear') start.setMonth(end.getMonth()<6?0:6,1); else if(p==='yearly') start.setMonth(0,1); $('#movementReportFrom').value=start.toISOString().slice(0,10); $('#movementReportTo').value=end.toISOString().slice(0,10); refresh(); }));
+  ['movementReportFrom','movementReportTo'].forEach((id) => $(`#${id}`).addEventListener('change', refresh)); view.scrollIntoView({behavior:'smooth',block:'start'});
 }
 
 function openInventoryAuditReport() {
