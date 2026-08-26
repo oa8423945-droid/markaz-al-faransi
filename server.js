@@ -593,6 +593,20 @@ function inventoryAuditRows(data) {
   }).sort((first, second) => first.statement.localeCompare(second.statement, 'ar'));
 }
 
+function inventoryMovementRows(data, from = '', to = '') {
+  return (data.movements || []).filter((m) => (!from || m.date >= from) && (!to || m.date <= to)).map((m) => ({ code: m.code || '—', date: m.date || '—', time: m.time || '—', direction: m.type || '—', productCode: m.productCode || '—', productName: [m.productName, m.details].filter(Boolean).join(' — ') || '—', qty: Number(m.qty) || 0, amount: Number(m.total) || 0, customerCode: m.customerCode || '—', supplierCode: m.supplierCode || '—' }));
+}
+
+async function inventoryMovementsWorkbook(data, from, to) {
+  const rows = inventoryMovementRows(data, from, to); const workbook = new ExcelJS.Workbook(); const sheet = workbook.addWorksheet('جرد حركة المخزن', { views: [{ rightToLeft: true, showGridLines: true }] });
+  sheet.addRow(['جرد حركة المخزن', `من ${from} إلى ${to}`]); sheet.addRow([]); sheet.addRow(['كود الحركة','اليوم','الوقت','نوع الحركة','كود المنتج','بيان المنتج','الكمية','المبلغ','كود العميل','كود المورد']);
+  rows.forEach((r) => sheet.addRow([r.code,r.date,r.time,r.direction,r.productCode,r.productName,r.qty,r.amount,r.customerCode,r.supplierCode]));
+  sheet.getRow(3).eachCell((c) => { c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFD966'}}; c.font={name:'Tahoma',size:16,bold:true,color:{argb:'FF111827'}}; c.alignment={horizontal:'center'}; });
+  [18,14,12,14,16,42,12,16,16,16].forEach((w,i)=>sheet.getColumn(i+1).width=w); sheet.getColumn(7).numFmt='#,##0'; sheet.getColumn(8).numFmt='#,##0.00'; return Buffer.from(await workbook.xlsx.writeBuffer());
+}
+
+function inventoryMovementsPdf(data, from, to) { return new Promise((resolve, reject) => { try { const rows=inventoryMovementRows(data,from,to); const doc=new PDFDocument({size:'A4',margins:{top:38,right:32,bottom:40,left:32},bufferPages:true}); const chunks=[]; doc.on('data',c=>chunks.push(c)); doc.on('end',()=>resolve(Buffer.concat(chunks))); doc.on('error',reject); const fonts=path.join(process.env.WINDIR||'C:\\Windows','Fonts'); const regular=['tahoma.ttf','arial.ttf'].map(n=>path.join(fonts,n)).find(fs.existsSync); const bold=['tahomabd.ttf','arialbd.ttf'].map(n=>path.join(fonts,n)).find(fs.existsSync); if(!regular||!bold) throw new Error('تعذر العثور على خط عربي مناسب.'); doc.registerFont('Arabic',regular);doc.registerFont('ArabicBold',bold); const rtl=(t,x,y,w,o={})=>pdfRtlText(doc,t,x,y,w,o); const cols=[55,55,55,65,70,130,45,60,55,55]; const labels=['كود المورد','كود العميل','المبلغ','الكمية','بيان المنتج','كود المنتج','نوع الحركة','الوقت','اليوم','كود الحركة']; const left=25; let y=48; rtl('تقرير جرد حركة المخزن',left,y,545,{bold:true,size:19}); rtl(`الفترة: ${from} إلى ${to}`,left,y+28,545,{size:9,color:'#667085'}); y+=58; const head=()=>{let x=left; labels.forEach((l,i)=>{doc.rect(x,y,cols[i],28).fillAndStroke('#FFD966','#D9A900');rtl(l,x+2,y+8,cols[i]-4,{bold:true,size:6});x+=cols[i]});y+=28}; const row=(vals)=>{if(y>760){doc.addPage();y=48;head()}let x=left;vals.forEach((v,i)=>{doc.rect(x,y,cols[i],25).fillAndStroke('#fff','#e5e7eb');rtl(v,x+2,y+7,cols[i]-4,{size:6});x+=cols[i]});y+=25}; head(); rows.forEach(r=>row([r.supplierCode,r.customerCode,r.amount,r.qty,r.productName,r.productCode,r.direction,r.time,r.date,r.code])); doc.end(); } catch(e){reject(e);} }); }
+
 async function inventoryAuditWorkbook(data) {
   const rows = inventoryAuditRows(data);
   const workbook = new ExcelJS.Workbook();
@@ -889,6 +903,12 @@ async function api(request, response, pathname, searchParams) {
     const buffer = await inventoryAuditWorkbook(data);
     response.writeHead(200, { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Content-Disposition': 'attachment; filename="inventory-audit.xlsx"', 'Content-Length': buffer.length, 'Cache-Control': 'no-store' });
     return response.end(buffer);
+  }
+
+  if (request.method === 'GET' && pathname === '/api/inventory-movements-report') {
+    const format = clean(searchParams?.get('format')) || 'xlsx'; const from = clean(searchParams?.get('from')) || '0000-01-01'; const to = clean(searchParams?.get('to')) || '9999-12-31'; const data = readData();
+    const buffer = format === 'pdf' ? await inventoryMovementsPdf(data, from, to) : await inventoryMovementsWorkbook(data, from, to);
+    response.writeHead(200, { 'Content-Type': format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Content-Disposition': `attachment; filename="inventory-movements.${format === 'pdf' ? 'pdf' : 'xlsx'}"`, 'Content-Length': buffer.length, 'Cache-Control': 'no-store' }); return response.end(buffer);
   }
 
   if (request.method === 'GET' && pathname === '/api/external-debts') {
