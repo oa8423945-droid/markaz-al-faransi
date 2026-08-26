@@ -1,5 +1,5 @@
-Warning: truncated output (original token count: 30234)
-Total output lines: 1308
+Warning: truncated output (original token count: 30806)
+Total output lines: 1327
 
 const state = { customers: [], visits: [], inventory: [], suppliers: [], employees: [], expenses: [], movements: [], accounts: [], selectedCustomer: null, movementMode: '', selectedProduct: null, productMovementMode: '', selectedSupplierName: '' };
 const $ = (selector) => document.querySelector(selector);
@@ -8,9 +8,9 @@ const fmt = (value) => Number(value || 0).toLocaleString('ar-EG');
 const esc = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[char]));
 const normalized = (value) => String(value || '').trim().replace(/[\s-]/g, '').toLocaleLowerCase('ar-EG');
 const codeKey = (value) => { const text = String(value || '').trim(); const match = text.match(/^([a-zA-Z])[-\s]*0*(\d+)$/); return match ? `${match[1].toUpperCase()}${Number(match[2])}` : normalized(text); };
-const paymentMethodOptions = () => ['نقدي', 'إنستاباي', 'فودافون كاش', 'تحويل بنكي', 'آجل'].map((value) => `<option value="${value}">${value}</option>`).join('');
-function paymentRow() { return `<div class="split-payment-row"><select class="split-payment-method">${paymentMethodOptions()}</select><input class="split-payment-amount" type="number" min="0" step="0.01" placeholder="المبلغ"><button type="button" class="remove-split-payment" aria-label="حذف">×</button></div>`; }
-function installSplitPayment(form, paidFieldName = '') {
+const paymentMethodOptions = (allowCredit = true) => (allowCredit ? ['نقدي', 'إنستاباي', 'فودافون كاش', 'تحويل بنكي', 'آجل'] : ['نقدي', 'إنستاباي', 'فودافون كاش', 'تحويل بنكي']).map((value) => `<option value="${value}">${value}</option>`).join('');
+function paymentRow(allowCredit = true) { return `<div class="split-payment-row"><select class="split-payment-method">${paymentMethodOptions(allowCredit)}</select><input class="split-payment-amount" type="number" min="0" step="0.01" placeholder="المبلغ"><button type="button" class="remove-split-payment" aria-label="حذف">×</button></div>`; }
+function installSplitPayment(form, paidFieldName = '', allowCredit = true) {
   if (!form || form.querySelector('.split-payment-editor')) return;
   const method = form.elements.paymentMethod;
   const methodLabel = method?.closest('label');
@@ -19,9 +19,10 @@ function installSplitPayment(form, paidFieldName = '') {
   if (paidFieldName && form.elements[paidFieldName]) form.elements[paidFieldName].closest('label')?.classList.add('legacy-payment-field');
   const editor = document.createElement('div');
   editor.className = 'split-payment-editor wide';
-  editor.innerHTML = `<div class="split-payment-head"><div><b>طرق الدفع</b><small>اكتب مبلغ كل طريقة، ويمكن إضافة أكثر من طريقة.</small></div><button type="button" class="secondary add-split-payment">＋ إضافة طريقة دفع</button></div><div class="split-payment-rows">${paymentRow()}</div>`;
+  editor.dataset.allowCredit = allowCredit ? '1' : '0';
+  editor.innerHTML = `<div class="split-payment-head"><div><b>طرق الدفع</b><small>اكتب مبلغ كل طريقة، ويمكن إضافة أكثر من طريقة.</small></div><button type="button" class="secondary add-split-payment">＋ إضافة طريقة دفع</button></div><div class="split-payment-rows">${paymentRow(allowCredit)}</div>`;
   methodLabel.before(editor);
-  const addRow = () => { editor.querySelector('.split-payment-rows').insertAdjacentHTML('beforeend', paymentRow()); bindSplitPaymentRows(editor); };
+  const addRow = () => { editor.querySelector('.split-payment-rows').insertAdjacentHTML('beforeend', paymentRow(allowCredit)); bindSplitPaymentRows(editor); };
   editor.querySelector('.add-split-payment').addEventListener('click', addRow);
   bindSplitPaymentRows(editor);
 }
@@ -38,7 +39,7 @@ function bindSplitPaymentRows(editor) {
 }
 function resetSplitPayment(form) {
   const rows = form.querySelector('.split-payment-rows');
-  if (rows) rows.innerHTML = paymentRow();
+  if (rows) rows.innerHTML = paymentRow(form.querySelector('.split-payment-editor')?.dataset.allowCredit !== '0');
   if (rows) bindSplitPaymentRows(form.querySelector('.split-payment-editor'));
 }
 function addPaymentsToInput(input, form) {
@@ -244,14 +245,14 @@ function upgradeSearchableChoices() {
     laborLabel.insertAdjacentHTML('afterend', `<label>طريقة الدفع<select name="paymentMethod" required>${paymentMethodOptions()}</select></label><label>المبلغ المدفوع<input name="paid" type="number" min="0" step="0.01" placeholder="فارغ = سداد الإجمالي"></label>`);
   }
   if (!$('#inventoryForm [name="paymentMethod"]')) {
-    $('.inventory-common-fields').insertAdjacentHTML('beforeend', `<label>طريقة الدفع<select name="paymentMethod" required>${paymentMethodOptions()}</select></label>`);
+    $('.inventory-common-fields').insertAdjacentHTML('beforeend', `<label>طريقة الدفع<select name="paymentMethod" required>${paymentMethodOptions(false)}</select></label>`);
   }
   if (!$('#supplierTransactionForm [name="paymentMethod"]')) {
-    $('#supplierTransactionForm .transaction-notes').insertAdjacentHTML('beforebegin', `<label class="transaction-notes">طريقة الدفع<select name="paymentMethod" required>${paymentMethodOptions()}</select></label>`);
+    $('#supplierTransactionForm .transaction-notes').insertAdjacentHTML('beforebegin', `<label class="transaction-notes">طريقة الدفع<select name="paymentMethod" required>${paymentMethodOptions(false)}</select></label>`);
   }
   installSplitPayment($('#visitForm'), 'paid');
-  installSplitPayment($('#inventoryForm'), 'paid');
-  installSplitPayment($('#supplierTransactionForm'), 'paid');
+  installSplitPayment($('#inventoryForm'), 'paid', false);
+  installSplitPayment($('#supplierTransactionForm'), 'paid', false);
   installSplitPayment($('#manualAccountForm'));
 }
 
@@ -788,23 +789,7 @@ function installEmployeesUI() {
   details.innerHTML = '<div class="employee-details-dialog"><button type="button" class="dialog-close">×</button><div id="employeeDetailsContent"></div></div>';
   document.body.appendChild(details); details.querySelector('.dialog-close').addEventListener('click', () => details.close());
   const statusDialog = document.createElement('dialog'); statusDialog.id = 'employeeStatusDialog';
-  statusDialog.innerHTML = `<form id="employeeStatusForm"><button type="button" class="dialog-close">×</button><input type="hidden" name="employeeCode"><div class="dialog-title"><span>!</span><div><h2>تغيير حالة الموظف</h2><p id="employeeStatusName"></p></div></div><div class="form-grid"><label>الحالة<select name="status" required><option value="موقوف مؤقتًا">موقوف مؤقتًا</option><option value="منتهي الخدمة">منتهي الخدمة</option></select></label><label>تاريخ الإيقاف<input name="stopDate" type="date" required></label><label class="wide">سبب الإيقاف أو إنهاء الخ…234 tokens truncated…mployee.status || employee.status === 'يعمل');
-  $('#employeesCount').textContent = `${fmt(active.length)} موظف يعمل`;
-  if (!active.length) { $('#employeesTable').innerHTML = '<div class="empty-state">لا يوجد موظفون عاملون حاليًا.</div>'; return; }
-  const rows = active.map(employeeTableRow).join('');
-  $('#employeesTable').innerHTML = `<div class="table-wrap"><table><thead><tr><th>الكود</th><th>الاسم</th><th>التليفون</th><th>تاريخ التوظيف</th><th>التخصص</th><th>المشاركات</th><th>المرتب الأسبوعي</th><th>عليه</th><th>له</th></tr></thead><tbody>${rows}</tbody></table></div>`;
-  $$('#employeesTable .employee-row').forEach((row) => row.addEventListener('click', () => showEmployeeDetails(row.dataset.employeeCode)));
-}
-
-function employeeTableRow(employee, stopped = false) {
-  return `<tr class="employee-row ${stopped ? 'stopped-employee-row' : ''}" data-employee-code="${esc(employee.code)}"><td><b>${esc(employee.code)}</b></td><td><b>${esc(employee.name)}</b></td><td>${esc(employee.phone)}</td><td>${esc(employee.hireDate)}</td><td>${esc(employee.specialty)}</td><td>${fmt(employee.contributions)}</td><td>${fmt(employee.weeklySalary)} ج</td><td>${fmt(employee.debtOnEmployee)} ج</td><td>${fmt(employee.dueToEmployee)} ج</td>${stopped ? `<td>${esc(employee.status)}</td><td>${esc(employee.stopDate || '—')}</td><td>${esc(employee.stopReason || '—')}</td>` : ''}</tr>`;
-}
-
-function showStoppedEmployees() {
-  $('#activeEmployeesView').classList.add('hidden'); $('#stoppedEmployeesView').classList.remove('hidden');
-  const stopped = state.employees.filter((employee) => employee.status && employee.status !== 'يعمل');
-  $('#stoppedEmployeesCount').textContent = `${fmt(stopped.length)} موظف`;
-  $('#stoppedEmployeesTable').innerHTML = stopped.length ? `<div class="table-wrap"><table><thead><tr><th>الكود</th><th>الاسم</th><th>التليفون</th><th>تاريخ التوظيف</th><th>التخصص</th><th>المشاركات</th><th>المرتب</th><th>عليه</th><th>له</th><th>الحالة</th><th>تاريخ الإيقاف</th><th>السبب</th></tr></thead><tbody>${stopped.map((employee) => employeeTableRow(employee, true)).join('')}</tbody></table></div>` : '<div class="empty-state">لا يوجد موظفون موقوفون عن العمل.</div>';
+  statusDialog.innerHTML = `<form id="employeeStatusForm"><button type="button" class="dialog-close">×</button><input type="hidden" name="employeeCode"><div class="dialog-title"><span>!</span><div><h2>تغيير حالة الموظف</h2><p id="employeeStatusName"></p></div></div><div class="form-grid"><label>الحالة<…806 tokens truncated…اسم</th><th>التليفون</th><th>تاريخ التوظيف</th><th>التخصص</th><th>المشاركات</th><th>المرتب</th><th>عليه</th><th>له</th><th>الحالة</th><th>تاريخ الإيقاف</th><th>السبب</th></tr></thead><tbody>${stopped.map((employee) => employeeTableRow(employee, true)).join('')}</tbody></table></div>` : '<div class="empty-state">لا يوجد موظفون موقوفون عن العمل.</div>';
   $$('#stoppedEmployeesTable .employee-row').forEach((row) => row.addEventListener('click', () => showEmployeeDetails(row.dataset.employeeCode)));
 }
 
@@ -862,10 +847,10 @@ function installAccountsUI() {
   page.appendChild(summaries);
   const dialog = document.createElement('dialog');
   dialog.id = 'manualAccountDialog';
-  dialog.innerHTML = `<form id="manualAccountForm"><button type="button" class="dialog-close">×</button><div class="dialog-title"><span>ج</span><div><h2>تسجيل حركة مالية</h2><p>سيتم إنشاء كود T تلقائيًا.</p></div></div><div class="form-grid"><label>نوع التسجيل<select name="operation" required><option value="">اختر</option><option value="سحب">سحب</option><option value="إيداع">إيداع</option><option value="دين">دين</option></select></label><label id="debtSideField" class="hidden">الدين على مَن؟<select name="debtSide"><option value="على العميل">مستحق على العميل</option><option value="على المركز">مستحق على المركز</option></select></label><label>تاريخ التنفيذ<input name="executionDate" type="date" required></label><label>نوع الحركة<input name="type" list="accountTypeOptions" placeholder="اختر أو اكتب نوعًا آخر" required><datalist id="accountTypeOptions"><option value="إذن صرف"><option value="مرتبات"><option value="مصروفات تشغيل"><option value="مشتريات نقدية"><option value="مصروفات إضافية"><option value="إيراد نقدي"><option value="سلفة"><option value="أجل"></datalist></label><label>المبلغ<input name="amount" type="number" min="0.01" step="0.01" required></label><label class="wide">ملاحظات<textarea name="notes" rows="3" placeholder="اكتب أخد إيه ولمين وأي تفاصيل أخرى"></textarea></label></div><div class="form-actions"><button class="primary" type="submit">حفظ الحركة</button></div></form>`;
+  dialog.innerHTML = `<form id="manualAccountForm"><button type="button" class="dialog-close">×</button><div class="dialog-title"><span>ج</span><div><h2>تسجيل حركة مالية</h2><p>سيتم إنشاء كود T تلقائيًا.</p></div></div><div class="form-grid"><label>نوع التسجيل<select name="operation" required><option value="">اختر</option><option value="سحب">سحب</option><option value="إيداع">إيداع</option><option value="دين">دين</option></select></label><label id="debtSideField" class="hidden">الدين على مَن؟<select name="debtSide"><option value="على العميل">مستحق على العميل</option><option value="على المركز">مستحق على المركز</option></select></label><label>تاريخ التنفيذ<input name="executionDate" type="date" required></label><label>نوع الحركة<input name="type" list="accountTypeOptions" placeholder="اختر أو اكتب نوعًا آخر" required><datalist id="accountTypeOptions"><option value="إذن صرف"><option value="مرتبات"><option value="مصروفات تشغيل"><option value="مشتريات نقدية"><option value="مصروفات إضافية"><option value="إيراد نقدي"><option value="سداد مديونية"><option value="سلفة"><option value="أجل"></datalist></label><label>المبلغ<input name="amount" type="number" min="0.01" step="0.01" required></label><label class="wide">ملاحظات<textarea name="notes" rows="3" placeholder="اكتب أخد إيه ولمين وأي تفاصيل أخرى"></textarea></label></div><div class="form-actions"><button class="primary" type="submit">حفظ الحركة</button></div></form>`;
   document.body.appendChild(dialog);
   const manualGrid = $('#manualAccountForm .form-grid');
-  manualGrid.querySelector('.wide').insertAdjacentHTML('beforebegin', `<label class="wide">البيان<input name="description" required placeholder="اكتب المشتريات أو سبب المصروف بالتفصيل"></label><label id="manualCustomerField">العميل (اختياري)<input name="customerCode" list="manualCustomerOptions" placeholder="كود أو اسم العميل"><datalist id="manualCustomerOptions"></datalist></label><label id="manualSupplierField">المورد (اختياري)<input name="supplierCode" list="manualSupplierOptions" placeholder="كود أو اسم المورد"><datalist id="manualSupplierOptions"></datalist></label><label id="manualEmployeeField" class="hidden">الموظف<input name="employeeCode" list="manualEmployeeOptions" placeholder="كود أو اسم الموظف"><datalist id="manualEmployeeOptions"></datalist></label><label>طريقة الدفع<select name="paymentMethod" required>${paymentMethodOptions()}</select></label>`);
+  manualGrid.querySelector('.wide').insertAdjacentHTML('beforebegin', `<label class="wide">البيان<input name="description" required placeholder="اكتب المشتريات أو سبب المصروف بالتفصيل"></label><label id="manualCustomerField">العميل (اختياري)<input name="customerCode" list="manualCustomerOptions" placeholder="كود أو اسم العميل"><datalist id="manualCustomerOptions"></datalist></label><label id="manualSupplierField">المورد (اختياري)<input name="supplierCode" list="manualSupplierOptions" placeholder="كود أو اسم المورد"><datalist id="manualSupplierOptions"></datalist></label><label id="manualEmployeeField" class="hidden">الموظف<input name="employeeCode" list="manualEmployeeOptions" placeholder="كود أو اسم الموظف"><datalist id="manualEmployeeOptions"></datalist></label><div id="manualDebtHint" class="debt-inline-hint wide hidden"></div><label>طريقة الدفع<select name="paymentMethod" required>${paymentMethodOptions()}</select></label>`);
   $('#accountTypeOptions').insertAdjacentHTML('beforeend', '<option value="سلفة موظف"><option value="سداد سلفة موظف"><option value="مستحق لموظف"><option value="دفع مستحق موظف">');
   dialog.querySelector('.dialog-close').addEventListener('click', () => dialog.close());
   $('#addManualAccountButton').addEventListener('click', openManualAccount);
@@ -886,7 +871,9 @@ function installAccountsUI() {
   $('#manualAccountForm').addEventListener('submit', submitManualAccount);
   $('#manualAccountForm').elements.operation.addEventListener('change', updateManualDebtFields);
   $('#manualAccountForm').elements.type.addEventListener('input', updateManualEmployeeFields);
+  $('#manualAccountForm').elements.type.addEventListener('input', updateManualDebtHint);
   $('#manualAccountForm').elements.employeeCode.addEventListener('input', selectManualEmployee);
+  ['customerCode', 'supplierCode'].forEach((name) => $('#manualAccountForm').elements[name].addEventListener('input', updateManualDebtHint));
   const details = document.createElement('dialog');
   details.id = 'accountDetailsDialog';
   details.innerHTML = '<div class="account-details-dialog"><button type="button" class="dialog-close">×</button><div id="accountDetailsContent"></div></div>';
@@ -1080,6 +1067,20 @@ function updateManualDebtFields() {
   form.querySelector('.split-payment-editor').classList.toggle('hidden', isDebt);
   form.elements.customerCode.required = isDebt;
   if (isDebt && !form.elements.type.value) form.elements.type.value = 'سلفة';
+  updateManualDebtHint();
+}
+
+function updateManualDebtHint() {
+  const form = $('#manualAccountForm'); const hint = $('#manualDebtHint'); if (!form || !hint) return;
+  const type = form.elements.type.value; const customerKey = normalized(form.elements.customerCode.value); const supplierKey = normalized(form.elements.supplierCode.value); const employeeKey = normalized(form.elements.employeeCode.value);
+  const customer = state.customers.find((item) => normalized(item.code) === customerKey || normalized(item.name) === customerKey);
+  const supplier = state.suppliers.find((item) => normalized(item.code) === supplierKey || normalized(item.name) === supplierKey);
+  const employee = state.employees.find((item) => normalized(item.code) === employeeKey || normalized(item.name) === employeeKey);
+  let label = '';
+  if (employee && ['سداد سلفة موظف', 'دفع مستحق موظف'].includes(type)) label = type === 'سداد سلفة موظف' ? `المتبقي على الموظف: ${fmt(employee.debtOnEmployee)} ج` : `المستحق للموظف: ${fmt(employee.dueToEmployee)} ج`;
+  else if (customer && (type === 'سداد مديونية' || form.elements.operation.value === 'دين')) label = `المستحق على العميل: ${fmt(customer.dueFromCustomer)} ج · المستحق على المركز: ${fmt(customer.dueFromCenter)} ج`;
+  else if (supplier && type === 'سداد مستحقات') label = `المستحق للمورد: ${fmt(supplier.due)} ج`;
+  hint.textContent = label; hint.classList.toggle('hidden', !label);
 }
 
 function updateManualEmployeeFields() {
@@ -1097,6 +1098,7 @@ function updateManualEmployeeFields() {
   if (type === 'سداد سلفة موظف' || type === 'مستحق لموظف') form.elements.operation.value = 'إيداع';
   $('#debtSideField').classList.add('hidden');
   form.querySelector('.split-payment-editor').classList.toggle('hidden', type === 'مستحق لموظف');
+  updateManualDebtHint();
 }
 
 function selectManualEmployee() {
@@ -1110,6 +1112,7 @@ function selectManualEmployee() {
     if (paymentAmount && !paymentAmount.value) paymentAmount.value = employee.weeklySalary || '';
     if (!form.elements.description.value) form.elements.description.value = `مرتب أسبوعي — ${employee.name}`;
   }
+  updateManualDebtHint();
 }
 
 async function submitManualAccount(event) {
