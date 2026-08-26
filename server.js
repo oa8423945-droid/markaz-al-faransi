@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const XLSX = require('xlsx');
 const PDFDocument = require('pdfkit');
+const ExcelJS = require('exceljs');
 
 const PORT = Number(process.env.PORT || 3210);
 const ROOT = __dirname;
@@ -455,6 +456,68 @@ function reportHtml(data, fromDate, toDate, title) {
   return `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${escape(title)}</title><style>body{font-family:Tahoma,Arial;margin:28px;color:#111}h1{text-align:center}p{text-align:center;color:#555}.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:22px 0}.summary div{border:1px solid #aaa;padding:12px;text-align:center}.summary b{display:block;font-size:20px;margin-top:6px}table{border-collapse:collapse;width:100%;font-size:11px}th,td{border:1px solid #999;padding:7px;text-align:right}th{background:#eee}@media print{button{display:none}body{margin:8mm}}</style></head><body><button onclick="window.print()">طباعة / حفظ PDF</button><h1>${escape(title)}</h1><p>${escape(fromDate)} — ${escape(toDate)}</p><div class="summary"><div>الوارد<b>${incoming}</b></div><div>الصادر<b>${outgoing}</b></div><div>الصافي<b>${incoming - outgoing}</b></div><div>الرصيد الحالي<b>${balance}</b></div></div><table><thead><tr><th>التاريخ</th><th>البيان</th><th>نوع الحركة</th><th>كود الحركة</th><th>الملاحظات</th><th>مدين</th><th>دائن</th><th>الرصيد بعد العملية</th></tr></thead><tbody>${rows || '<tr><td colspan="8">لا توجد حركات</td></tr>'}</tbody></table><script>window.addEventListener('load',()=>setTimeout(()=>window.print(),300))</script></body></html>`;
 }
 
+function supplierDebtRows(data) {
+  return data.suppliers.map((supplier) => ({ code: supplier.code, name: supplier.name,
+    paid: Number(supplier.paid) || 0, due: Number(supplier.due) || 0,
+    total: (Number(supplier.paid) || 0) + (Number(supplier.due) || 0) }))
+    .filter((supplier) => supplier.total > 0).sort((first, second) => second.due - first.due);
+}
+
+async function supplierDebtsWorkbook(data) {
+  const rows = supplierDebtRows(data);
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'المركز الفرنسي'; workbook.created = new Date();
+  const sheet = workbook.addWorksheet('ديون الموردين', { views: [{ rightToLeft: true, state: 'frozen', ySplit: 3 }] });
+  sheet.mergeCells('A1:E1'); sheet.getCell('A1').value = 'تقرير ديون الموردين';
+  sheet.getCell('A1').font = { name: 'Tahoma', size: 16, bold: true, color: { argb: 'FF17243C' } };
+  sheet.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' }; sheet.getRow(1).height = 30;
+  sheet.getCell('A2').value = 'تاريخ التقرير'; sheet.getCell('B2').value = new Date(); sheet.getCell('B2').numFmt = 'yyyy-mm-dd';
+  sheet.addRow(['كود المورد', 'اسم المورد', 'إجمالي المبلغ', 'المبلغ المدفوع', 'المبلغ المتبقي']);
+  rows.forEach((supplier) => sheet.addRow([supplier.code, supplier.name, supplier.total, supplier.paid, supplier.due]));
+  const firstDataRow = 4; const lastDataRow = sheet.rowCount;
+  const sums = rows.reduce((result, supplier) => ({ total: result.total + supplier.total, paid: result.paid + supplier.paid, due: result.due + supplier.due }), { total: 0, paid: 0, due: 0 });
+  const totalValues = rows.length ? [{ formula: `SUM(C${firstDataRow}:C${lastDataRow})`, result: sums.total }, { formula: `SUM(D${firstDataRow}:D${lastDataRow})`, result: sums.paid }, { formula: `SUM(E${firstDataRow}:E${lastDataRow})`, result: sums.due }] : [0, 0, 0];
+  const totalRow = sheet.addRow([null, 'الإجمالي', ...totalValues]);
+  sheet.getRow(3).height = 25; sheet.getRow(3).eachCell((cell) => {
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFD966' } };
+    cell.font = { name: 'Tahoma', bold: true, color: { argb: 'FF111827' } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    cell.border = { bottom: { style: 'medium', color: { argb: 'FFE2A900' } } };
+  });
+  sheet.eachRow((row, rowNumber) => { if (rowNumber < 4) return;
+    row.font = { name: 'Tahoma', size: 11, bold: rowNumber === totalRow.number }; row.alignment = { vertical: 'middle', horizontal: 'right' }; row.height = 22;
+    row.eachCell((cell) => { cell.border = { bottom: { style: 'thin', color: { argb: 'FFE5E7EB' } } }; });
+  });
+  totalRow.eachCell((cell) => { cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF4CC' } }; });
+  ['C', 'D', 'E'].forEach((column) => { sheet.getColumn(column).numFmt = '#,##0.00 "ج"'; });
+  sheet.columns = [{ width: 16 }, { width: 28 }, { width: 20 }, { width: 20 }, { width: 20 }];
+  if (rows.length) sheet.autoFilter = `A3:E${sheet.rowCount - 1}`;
+  return Buffer.from(await workbook.xlsx.writeBuffer());
+}
+
+function supplierDebtsPdf(data) {
+  return new Promise((resolve, reject) => { try {
+    const rows = supplierDebtRows(data); const doc = new PDFDocument({ size: 'A4', margins: { top: 38, right: 42, bottom: 45, left: 42 }, bufferPages: true });
+    const chunks = []; doc.on('data', (chunk) => chunks.push(chunk)); doc.on('end', () => resolve(Buffer.concat(chunks))); doc.on('error', reject);
+    const fonts = path.join(process.env.WINDIR || 'C:\\Windows', 'Fonts');
+    const regular = ['tahoma.ttf', 'arial.ttf'].map((name) => path.join(fonts, name)).find(fs.existsSync);
+    const bold = ['tahomabd.ttf', 'arialbd.ttf'].map((name) => path.join(fonts, name)).find(fs.existsSync);
+    if (!regular || !bold) throw new Error('تعذر العثور على خط عربي مناسب لإنشاء التقرير.');
+    doc.registerFont('Arabic', regular); doc.registerFont('ArabicBold', bold);
+    const reverse = (value) => [...String(value)].reverse().join('');
+    const money = (value) => Number(value || 0).toFixed(2);
+    const rtl = (text, x, y, width, options = {}) => doc.font(options.bold ? 'ArabicBold' : 'Arabic').fontSize(options.size || 9).fillColor(options.color || '#111827').text(String(text).replace(/\s+/g, '\u00A0'), x, y, { width, align: 'right' });
+    const left = 42; const width = doc.page.width - 84; const columns = [75, 150, 94, 94, 94];
+    const drawHeader = (continued = false) => { rtl(continued ? 'تقرير ديون الموردين - تابع' : 'تقرير ديون الموردين', left, 45, width, { bold: true, size: 20, color: '#17243C' }); rtl(`تاريخ التقرير: ${reverse(new Date().toISOString().slice(0, 10))}`, left, 75, width, { size: 9, color: '#667085' }); doc.moveTo(left, 96).lineTo(left + width, 96).lineWidth(3).strokeColor('#F7941D').stroke(); };
+    const drawTableHeader = (y) => { const labels = ['كود المورد', 'اسم المورد', 'إجمالي المبلغ', 'المبلغ المدفوع', 'المبلغ المتبقي']; let x = left; labels.forEach((label, index) => { doc.rect(x, y, columns[index], 30).fillAndStroke('#FFD966', '#D9A900'); rtl(label, x + 4, y + 9, columns[index] - 8, { bold: true, size: 8 }); x += columns[index]; }); return y + 30; };
+    drawHeader(); let y = drawTableHeader(112);
+    const drawDataRow = (values, total = false) => { if (y > 750) { doc.addPage(); drawHeader(true); y = drawTableHeader(112); } let x = left; values.forEach((value, index) => { doc.rect(x, y, columns[index], 29).fillAndStroke(total ? '#FFF4CC' : '#FFFFFF', '#E5E7EB'); rtl(value, x + 4, y + 9, columns[index] - 8, { bold: total, size: 8 }); x += columns[index]; }); y += 29; };
+    rows.forEach((supplier) => drawDataRow([supplier.code || '—', supplier.name || '—', money(supplier.total), money(supplier.paid), money(supplier.due)]));
+    drawDataRow(['', 'الإجمالي', money(rows.reduce((sum, item) => sum + item.total, 0)), money(rows.reduce((sum, item) => sum + item.paid, 0)), money(rows.reduce((sum, item) => sum + item.due, 0))], true);
+    rtl('المركز الفرنسي - تقرير مالي داخلي', left, 775, width, { bold: true, size: 8, color: '#667085' }); doc.end();
+  } catch (error) { reject(error); } });
+}
+
 function json(response, status, body) {
   response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
   response.end(JSON.stringify(body));
@@ -621,6 +684,19 @@ async function api(request, response, pathname, searchParams) {
     }
     const buffer = XLSX.write(dailyCloseWorkbook(data, from, to, title), { type: 'buffer', bookType: 'xlsx', compression: true });
     response.writeHead(200, { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Content-Disposition': `attachment; filename="financial-report-${from}-${to}.xlsx"`, 'Content-Length': buffer.length });
+    return response.end(buffer);
+  }
+
+  if (request.method === 'GET' && pathname === '/api/supplier-debts') {
+    const format = clean(searchParams?.get('format')) || 'xlsx';
+    const data = readData();
+    if (format === 'pdf') {
+      const buffer = await supplierDebtsPdf(data);
+      response.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="supplier-debts.pdf"', 'Content-Length': buffer.length, 'Cache-Control': 'no-store' });
+      return response.end(buffer);
+    }
+    const buffer = await supplierDebtsWorkbook(data);
+    response.writeHead(200, { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Content-Disposition': 'attachment; filename="supplier-debts.xlsx"', 'Content-Length': buffer.length, 'Cache-Control': 'no-store' });
     return response.end(buffer);
   }
 
