@@ -29,7 +29,7 @@ const INVENTORY_HEADERS = ['اسم المنتج', 'تفاصيل المنتج', '
 const SUPPLIER_HEADERS = ['كود المورد', 'اسم المورد', 'رقم التلفون', 'تاريخ التعاقد', 'المبلغ المطلوب', 'ملاحظات', 'المبلغ المدفوع', 'تاريخ الدفع'];
 const EXPENSE_HEADERS = ['البيان', 'المبلغ', 'التاريخ'];
 const MOVEMENT_HEADERS = ['كود الحركة', 'التاريخ', 'نوع الحركة', 'كود المنتج', 'اسم المنتج', 'تفاصيل المنتج', 'بلد المنشأ', 'الكمية', 'سعر الوحدة', 'الإجمالي', 'كود الزيارة', 'كود العميل', 'اسم المورد', 'ملاحظات'];
-const ACCOUNT_HEADERS = ['كود الحركة', 'التاريخ', 'تاريخ التنفيذ', 'اتجاه الحركة', 'نوع الحركة', 'البيان', 'كود العميل', 'اسم العميل', 'كود الزيارة', 'كود المورد', 'اسم المورد', 'كود الموظف', 'اسم الموظف', 'كود المنتج', 'اسم المنتج', 'الكمية', 'إجمالي المبلغ', 'المبلغ المدفوع', 'المبلغ المستحق', 'طريقة الدفع', 'تفاصيل طرق الدفع', 'رصيد المركز', 'ملاحظات'];
+const ACCOUNT_HEADERS = ['كود الحركة', 'التاريخ', 'الوقت', 'تاريخ التنفيذ', 'اتجاه الحركة', 'نوع الحركة', 'البيان', 'كود العميل', 'اسم العميل', 'كود الزيارة', 'كود المورد', 'اسم المورد', 'كود الموظف', 'اسم الموظف', 'كود المنتج', 'اسم المنتج', 'الكمية', 'إجمالي المبلغ', 'المبلغ المدفوع', 'المبلغ المستحق', 'طريقة الدفع', 'تفاصيل طرق الدفع', 'رصيد المركز', 'ملاحظات'];
 const EMPLOYEE_HEADERS = ['كود الموظف', 'الاسم', 'رقم التلفون', 'تاريخ التوظيف', 'التخصص', 'عدد المشاركات في الأعمال', 'المرتب الأسبوعي', 'مبالغ على الموظف', 'مبالغ للموظف', 'الحالة', 'سبب الإيقاف', 'تاريخ الإيقاف', 'ملاحظات'];
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -45,6 +45,10 @@ process.on('SIGTERM', () => { clearPidFile(); process.exit(0); });
 
 function clean(value) {
   return String(value ?? '').trim();
+}
+
+function currentTime() {
+  return new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 }
 
 function normalizedPlate(value) {
@@ -110,6 +114,7 @@ function nextCode(existing, prefix) {
 }
 
 function appendAccount(accounts, account) {
+  if (!account.time) account.time = currentTime();
   const currentBalance = accounts.reduce((balance, entry) => {
     const cash = Number(entry.paid) || 0;
     return balance + (entry.direction === 'وارد' ? cash : entry.direction === 'صادر' ? -cash : 0);
@@ -242,7 +247,7 @@ function readData() {
   }
   const accounts = accountRows.map((row) => ({
     code: clean(row['كود الحركة']).toUpperCase().startsWith('T') ? normalizedAutoCode(row['كود الحركة'], 'T') : normalizedAutoCode(row['كود الحركة'], 'A'),
-    date: clean(row['التاريخ']), executionDate: clean(row['تاريخ التنفيذ']) || clean(row['التاريخ']), direction: clean(row['اتجاه الحركة']), type: clean(row['نوع الحركة']),
+    date: clean(row['التاريخ']), time: clean(row['الوقت']), executionDate: clean(row['تاريخ التنفيذ']) || clean(row['التاريخ']), direction: clean(row['اتجاه الحركة']), type: clean(row['نوع الحركة']),
     description: clean(row['البيان']), customerCode: normalizedAutoCode(row['كود العميل'], 'C'), customerName: clean(row['اسم العميل']),
     visitCode: normalizedAutoCode(row['كود الزيارة'], 'V'), supplierCode: normalizedAutoCode(row['كود المورد'], 'S'), supplierName: clean(row['اسم المورد']),
     employeeCode: normalizedAutoCode(row['كود الموظف'], 'E'), employeeName: clean(row['اسم الموظف']),
@@ -324,7 +329,7 @@ function saveData(customers, visits, inventory = null, suppliers = null, movemen
   }
   if (accounts) {
     writeSheet(workbook, ACCOUNT_SHEET, ACCOUNT_HEADERS, accounts.map((account) => ({
-      'كود الحركة': account.code, 'التاريخ': account.date, 'نوع الحركة': account.type, 'البيان': account.description,
+      'كود الحركة': account.code, 'التاريخ': account.date, 'الوقت': account.time, 'نوع الحركة': account.type, 'البيان': account.description,
       'تاريخ التنفيذ': account.executionDate || account.date, 'اتجاه الحركة': account.direction,
       'كود العميل': account.customerCode, 'اسم العميل': account.customerName, 'كود الزيارة': account.visitCode,
       'كود المورد': account.supplierCode, 'اسم المورد': account.supplierName,
@@ -422,8 +427,8 @@ function dailyCloseWorkbook(data, fromDate, toDate = fromDate, reportTitle = 'إ
     rows.push([title], headers, ...(values.length ? values : [['لا توجد حركات']]), []);
   };
   const withdrawals = accounts.filter((account) => account.direction === 'صادر' && account.code.startsWith('T'));
-  addSection('الوارد', ['التاريخ', 'البيان', 'النوع', 'كود الحركة', 'المبلغ', 'طريقة الدفع'], accounts.filter((account) => account.direction === 'وارد').map((account) => [account.executionDate || account.date, account.description, account.type, account.code, account.paid, account.paymentMethod]));
-  addSection('الصادر والخصومات', ['التاريخ', 'البيان', 'النوع', 'كود الحركة', 'المبلغ', 'طريقة الدفع'], accounts.filter((account) => account.direction === 'صادر').map((account) => [account.executionDate || account.date, account.description, account.type, account.code, account.paid, account.paymentMethod]));
+  addSection('الوارد', ['التاريخ', 'الوقت', 'البيان', 'النوع', 'كود الحركة', 'المبلغ', 'طريقة الدفع'], accounts.filter((account) => account.direction === 'وارد').map((account) => [account.executionDate || account.date, account.time || '—', account.description, account.type, account.code, account.paid, account.paymentMethod]));
+  addSection('الصادر والخصومات', ['التاريخ', 'الوقت', 'البيان', 'النوع', 'كود الحركة', 'المبلغ', 'طريقة الدفع'], accounts.filter((account) => account.direction === 'صادر').map((account) => [account.executionDate || account.date, account.time || '—', account.description, account.type, account.code, account.paid, account.paymentMethod]));
   addSection('المسحوبات والمصروفات التشغيلية', ['البيان', 'النوع', 'المبلغ', 'طريقة الدفع', 'الملاحظات'], withdrawals.map((account) => [account.description, account.type, account.paid, account.paymentMethod, account.notes]));
   const additionalExpenses = accounts.filter((account) => account.direction === 'صادر' && account.type === 'مصروفات إضافية');
   addSection('المصروفات الإضافية', ['البيان', 'المبلغ', 'طريقة الدفع', 'الملاحظات'], additionalExpenses.map((account) => [account.description, account.paid, account.paymentMethod, account.notes]));
@@ -440,8 +445,8 @@ function dailyCloseWorkbook(data, fromDate, toDate = fromDate, reportTitle = 'إ
     const customer = data.customers.find((item) => item.code === account.customerCode) || {};
     return [account.customerName || customer.name, account.customerCode, account.visitCode, customer.carType, visit.labor || 0, account.paid, account.due, account.paymentMethod];
   }));
-  addSection('كشف الحساب', ['التاريخ', 'البيان', 'نوع الحركة', 'كود الحركة', 'ملاحظات', 'مدين', 'دائن', 'الرصيد بعد العملية'], accounts.map((account) => [account.executionDate || account.date, account.description, account.type, account.code, account.notes, account.direction === 'صادر' ? account.paid : 0, account.direction === 'وارد' ? account.paid : 0, account.balance]));
-  addSection('كل الحركات المالية', ACCOUNT_HEADERS, accounts.map((account) => [account.code, account.date, account.executionDate, account.direction, account.type, account.description, account.customerCode, account.customerName, account.visitCode, account.supplierCode, account.supplierName, account.employeeCode, account.employeeName, account.productCode, account.productName, account.qty, account.total, account.paid, account.due, account.paymentMethod, account.paymentDetails, account.balance, account.notes]));
+  addSection('كشف الحساب', ['التاريخ', 'الوقت', 'البيان', 'نوع الحركة', 'كود الحركة', 'ملاحظات', 'مدين', 'دائن', 'الرصيد بعد العملية'], accounts.map((account) => [account.executionDate || account.date, account.time || '—', account.description, account.type, account.code, account.notes, account.direction === 'صادر' ? account.paid : 0, account.direction === 'وارد' ? account.paid : 0, account.balance]));
+  addSection('كل الحركات المالية', ACCOUNT_HEADERS, accounts.map((account) => [account.code, account.date, account.time, account.executionDate, account.direction, account.type, account.description, account.customerCode, account.customerName, account.visitCode, account.supplierCode, account.supplierName, account.employeeCode, account.employeeName, account.productCode, account.productName, account.qty, account.total, account.paid, account.due, account.paymentMethod, account.paymentDetails, account.balance, account.notes]));
   const workbook = XLSX.utils.book_new();
   const sheet = XLSX.utils.aoa_to_sheet(rows);
   sheet['!cols'] = Array.from({ length: 20 }, (_, index) => ({ wch: index === 0 ? 28 : 18 }));
@@ -464,6 +469,7 @@ async function dailyCloseBuffer(data, fromDate, toDate = fromDate, reportTitle =
     const reportHeading = rowNumber === 1;
     for (let column = 1; column <= maxColumns; column += 1) {
       const cell = row.getCell(column);
+      if (typeof cell.value === 'string') cell.value = cell.value.replace(/(\d{4})-(\d{2})-(\d{2})/g, '$1/$2/$3');
       cell.alignment = { horizontal: 'right', vertical: 'middle', wrapText: true };
       cell.font = { name: 'Tahoma', size: 12, color: { argb: 'FF111827' } };
       if (typeof cell.value === 'number') cell.numFmt = '#,##0.00 "ج"';
@@ -486,6 +492,13 @@ async function dailyCloseBuffer(data, fromDate, toDate = fromDate, reportTitle =
   return Buffer.from(await workbook.xlsx.writeBuffer());
 }
 
+async function rtlWorkbookBuffer(filePath) {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.readFile(filePath);
+  workbook.worksheets.forEach((sheet) => { sheet.views = [{ rightToLeft: true, showGridLines: true }]; });
+  return Buffer.from(await workbook.xlsx.writeBuffer());
+}
+
 function reportHtml(data, fromDate, toDate, title) {
   const escape = (value) => clean(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
   const accounts = data.accounts.filter((account) => { const date = account.executionDate || account.date; return date >= fromDate && date <= toDate; });
@@ -495,10 +508,10 @@ function reportHtml(data, fromDate, toDate, title) {
   const balance = data.accounts.length ? data.accounts[data.accounts.length - 1].balance : 0;
   const parts = data.visits.filter((visit) => visit.date >= fromDate && visit.date <= toDate && visit.partsCodes);
   const section = (heading, headers, bodyRows, empty = 'لا توجد بيانات') => `<section><h2>${heading}</h2><table><thead><tr>${headers.map((header) => `<th>${header}</th>`).join('')}</tr></thead><tbody>${bodyRows || `<tr><td colspan="${headers.length}">${empty}</td></tr>`}</tbody></table></section>`;
-  const incomingRows = accounts.filter((a) => a.direction === 'وارد').map((a) => `<tr><td>${escape(a.executionDate || a.date)}</td><td>${escape(a.description)}</td><td>${escape(a.type)}</td><td>${escape(a.code)}</td><td>${a.paid}</td><td>${escape(a.paymentMethod || '—')}</td></tr>`).join('');
-  const outgoingRows = accounts.filter((a) => a.direction === 'صادر').map((a) => `<tr><td>${escape(a.executionDate || a.date)}</td><td>${escape(a.description)}</td><td>${escape(a.type)}</td><td>${escape(a.code)}</td><td>${a.paid}</td><td>${escape(a.paymentMethod || '—')}</td></tr>`).join('');
+  const incomingRows = accounts.filter((a) => a.direction === 'وارد').map((a) => `<tr><td>${escape(a.executionDate || a.date)}</td><td>${escape(a.time || '—')}</td><td>${escape(a.description)}</td><td>${escape(a.type)}</td><td>${escape(a.code)}</td><td>${a.paid}</td><td>${escape(a.paymentMethod || '—')}</td></tr>`).join('');
+  const outgoingRows = accounts.filter((a) => a.direction === 'صادر').map((a) => `<tr><td>${escape(a.executionDate || a.date)}</td><td>${escape(a.time || '—')}</td><td>${escape(a.description)}</td><td>${escape(a.type)}</td><td>${escape(a.code)}</td><td>${a.paid}</td><td>${escape(a.paymentMethod || '—')}</td></tr>`).join('');
   const partRows = parts.map((visit) => { const customer = data.customers.find((item) => item.code === visit.customerCode) || {}; const cost = Number(visit.partsCost || 0); const sale = Number(visit.partsTotal || 0); return `<tr><td>${escape(customer.name || '—')}</td><td>${escape(visit.code)}</td><td>${escape(visit.partsCodes)}</td><td>${cost}</td><td>${sale}</td><td>${sale - cost}</td></tr>`; }).join('');
-  return `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${escape(title)}</title><style>body{font-family:Tahoma,Arial;margin:28px;color:#111;background:#fff}h1{text-align:center;color:#17243c;margin:0 0 4px}p{text-align:center;color:#667085}.summary{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:20px 0}.summary div{border:1px solid #d7dde7;border-radius:8px;padding:11px;text-align:center;background:#f8fafc}.summary b{display:block;font-size:18px;margin-top:6px;color:#111827}section{border:1px solid #d7dde7;border-radius:10px;margin:16px 0;padding:12px;page-break-inside:avoid}h2{font-size:15px;border-right:4px solid #2676ee;padding-right:8px;margin:0 0 10px;color:#17243c}table{border-collapse:collapse;width:100%;font-size:10px}th,td{border:1px solid #d7dde7;padding:7px;text-align:right}th{background:#eef5ff;color:#17243c}footer{border-top:2px solid #f7941d;margin-top:22px;padding-top:10px;text-align:center;color:#667085;font-size:10px}@media print{button{display:none}body{margin:8mm}.summary{grid-template-columns:repeat(5,1fr)}}button{background:#2676ee;color:#fff;border:0;padding:9px 15px;border-radius:7px;font-weight:bold;cursor:pointer}</style></head><body><button onclick="window.print()">طباعة / حفظ PDF</button><h1>${escape(title)}</h1><p>${escape(fromDate)} — ${escape(toDate)}</p><div class="summary"><div>رصيد قبل الفترة<b>${beforeBalance}</b></div><div>الإضافات / الوارد<b>${incoming}</b></div><div>الخصومات / الصادر<b>${outgoing}</b></div><div>صافي الحركة<b>${incoming - outgoing}</b></div><div>الرصيد الحالي<b>${balance}</b></div></div>${section('الوارد', ['التاريخ','البيان','النوع','كود الحركة','المبلغ','طريقة الدفع'], incomingRows)}${section('الصادر والخصومات', ['التاريخ','البيان','النوع','كود الحركة','المبلغ','طريقة الدفع'], outgoingRows)}${section('قطع الغيار المستخدمة', ['العميل','كود الزيارة','القطع والكميات','تكلفة الشراء','سعر البيع','هامش الربح'], partRows)}<footer>المركز الفرنسي - تقرير يومية مالي</footer><script>window.addEventListener('load',()=>setTimeout(()=>window.print(),300))</script></body></html>`;
+  return `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${escape(title)}</title><style>body{font-family:Tahoma,Arial;margin:28px;color:#111;background:#fff}h1{text-align:center;color:#17243c;margin:0 0 4px}p{text-align:center;color:#667085}.summary{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:20px 0}.summary div{border:1px solid #d7dde7;border-radius:8px;padding:11px;text-align:center;background:#f8fafc}.summary b{display:block;font-size:18px;margin-top:6px;color:#111827}section{border:1px solid #d7dde7;border-radius:10px;margin:16px 0;padding:12px;page-break-inside:avoid}h2{font-size:15px;border-right:4px solid #2676ee;padding-right:8px;margin:0 0 10px;color:#17243c}table{border-collapse:collapse;width:100%;font-size:10px}th,td{border:1px solid #d7dde7;padding:7px;text-align:right}th{background:#eef5ff;color:#17243c}footer{border-top:2px solid #f7941d;margin-top:22px;padding-top:10px;text-align:center;color:#667085;font-size:10px}@media print{button{display:none}body{margin:8mm}.summary{grid-template-columns:repeat(5,1fr)}}button{background:#2676ee;color:#fff;border:0;padding:9px 15px;border-radius:7px;font-weight:bold;cursor:pointer}</style></head><body><button onclick="window.print()">طباعة / حفظ PDF</button><h1>${escape(title)}</h1><p>${escape(fromDate)} — ${escape(toDate)}</p><div class="summary"><div>رصيد قبل الفترة<b>${beforeBalance}</b></div><div>الإضافات / الوارد<b>${incoming}</b></div><div>الخصومات / الصادر<b>${outgoing}</b></div><div>صافي الحركة<b>${incoming - outgoing}</b></div><div>الرصيد الحالي<b>${balance}</b></div></div>${section('الوارد', ['التاريخ','الوقت','البيان','النوع','كود الحركة','المبلغ','طريقة الدفع'], incomingRows)}${section('الصادر والخصومات', ['التاريخ','الوقت','البيان','النوع','كود الحركة','المبلغ','طريقة الدفع'], outgoingRows)}${section('قطع الغيار المستخدمة', ['العميل','كود الزيارة','القطع والكميات','تكلفة الشراء','سعر البيع','هامش الربح'], partRows)}<footer>المركز الفرنسي - تقرير يومية مالي</footer><script>window.addEventListener('load',()=>setTimeout(()=>window.print(),300))</script></body></html>`;
 }
 
 function supplierDebtRows(data) {
@@ -680,12 +693,13 @@ async function api(request, response, pathname, searchParams) {
   }
 
   if (request.method === 'GET' && pathname === '/api/export') {
+    const buffer = await rtlWorkbookBuffer(DATA_FILE);
     response.writeHead(200, {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': 'attachment; filename="Book1.xlsx"',
-      'Content-Length': fs.statSync(DATA_FILE).size,
+      'Content-Length': buffer.length,
     });
-    return fs.createReadStream(DATA_FILE).pipe(response);
+    return response.end(buffer);
   }
 
   if (request.method === 'GET' && pathname === '/api/visit-invoice') {
