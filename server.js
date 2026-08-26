@@ -625,6 +625,7 @@ function inventoryMovementsPdf(data, from, to) {
       if (!regular || !bold) throw new Error('تعذر العثور على خط عربي مناسب.');
       doc.registerFont('Arabic', regular); doc.registerFont('ArabicBold', bold);
       const text = (value, x, y, width, options = {}) => pdfRtlText(doc, value, x, y, width, options);
+      const arabicNumber = (value) => String(Number(value) || 0).replace(/\d/g, (digit) => '٠١٢٣٤٥٦٧٨٩'[Number(digit)]);
       const left = 28; const widths = [72, 82, 88, 102, 72, 62, 62, 62, 72, 72];
       const headers = ['كود الحركة', 'التاريخ', 'الوقت', 'بيان المنتج', 'كود المنتج', 'الكمية', 'المبلغ', 'نوع الحركة', 'كود العميل', 'كود المورد'];
       let y = 36;
@@ -632,7 +633,7 @@ function inventoryMovementsPdf(data, from, to) {
       text(`الفترة من ${from || 'بداية السجل'} إلى ${to || 'اليوم'}`, left, y + 30, 785, { size: 11, color: '#475467' });
       y += 58;
       const header = () => { let x = left; headers.forEach((label, index) => { doc.rect(x, y, widths[index], 28).fillAndStroke('#FFD966', '#D4A700'); text(label, x + 3, y + 8, widths[index] - 6, { bold: true, size: 7 }); x += widths[index]; }); y += 28; };
-      const row = (item) => { if (y > 540) { doc.addPage(); y = 36; header(); } const color = item.direction === 'صادر' ? '#FEE2E2' : '#DCFCE7'; const border = item.direction === 'صادر' ? '#FCA5A5' : '#86EFAC'; const values = [item.code, item.date, item.time || 'غير مسجل', item.productName, item.productCode, String(item.qty), `${item.amount} ج`, item.direction, item.customerCode, item.supplierCode]; let x = left; values.forEach((value, index) => { doc.rect(x, y, widths[index], 26).fillAndStroke(color, border); text(value, x + 3, y + 8, widths[index] - 6, { size: 7, bold: index === 1 || index === 7 }); x += widths[index]; }); y += 26; };
+      const row = (item) => { if (y > 540) { doc.addPage(); y = 36; header(); } const color = item.direction === 'صادر' ? '#FEE2E2' : '#DCFCE7'; const border = item.direction === 'صادر' ? '#FCA5A5' : '#86EFAC'; const values = [item.code, item.date, item.time || 'غير مسجل', item.productName, item.productCode, arabicNumber(item.qty), `${arabicNumber(item.amount)} ج`, item.direction, item.customerCode, item.supplierCode]; let x = left; values.forEach((value, index) => { doc.rect(x, y, widths[index], 26).fillAndStroke(color, border); text(value, x + 3, y + 8, widths[index] - 6, { size: 7, bold: index === 1 || index === 7 }); x += widths[index]; }); y += 26; };
       header(); rows.forEach(row); if (!rows.length) text('لا توجد حركات في المدة المحددة.', left, y + 16, 785, { size: 12 });
       doc.end();
     } catch (error) { reject(error); }
