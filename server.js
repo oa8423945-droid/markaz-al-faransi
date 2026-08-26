@@ -463,10 +463,10 @@ function dailyCloseWorkbook(data, fromDate, toDate = fromDate, reportTitle = 'إ
   const supplierPayments = accounts.filter((account) => account.type === 'سداد مستحقات');
   addSection('دفعات الموردين', ['المورد', 'كود المورد', 'المبلغ', 'طريقة الدفع', 'البيان'], supplierPayments.map((account) => [account.supplierName, account.supplierCode, account.paid, account.paymentMethod, account.description]));
   const sales = accounts.filter((account) => account.type === 'إيراد زيارة صيانة');
-  addSection('المبيعات', ['العميل', 'كود العميل', 'كود الزيارة', 'نوع العربية', 'المصنعية', 'المبلغ المدفوع', 'المتبقي', 'طريقة الدفع'], sales.map((account) => {
+  addSection('المبيعات', ['العميل', 'كود العميل', 'كود الزيارة', 'نوع العربية', 'المصنعية', 'إجمالي الفاتورة', 'المبلغ المدفوع', 'المتبقي', 'طريقة الدفع'], sales.map((account) => {
     const visit = data.visits.find((item) => item.code === account.visitCode) || {};
     const customer = data.customers.find((item) => item.code === account.customerCode) || {};
-    return [account.customerName || customer.name, account.customerCode, account.visitCode, customer.carType, visit.labor || 0, account.paid, account.due, account.paymentMethod];
+    return [account.customerName || customer.name, account.customerCode, account.visitCode, customer.carType, visit.labor || 0, visit.total || account.total || 0, account.paid, account.due, account.paymentMethod];
   }));
   addSection('كشف الحساب', ['التاريخ', 'الوقت', 'البيان', 'نوع الحركة', 'كود الحركة', 'ملاحظات', 'مدين', 'دائن', 'الرصيد بعد العملية'], accounts.map((account) => [account.executionDate || account.date, account.time || '—', account.description, account.type, account.code, account.notes, account.direction === 'صادر' ? account.paid : 0, account.direction === 'وارد' ? account.paid : 0, account.balance]));
   addSection('كل الحركات المالية', ACCOUNT_HEADERS, accounts.map((account) => [account.code, account.date, account.time, account.executionDate, account.direction, account.type, account.description, account.customerCode, account.customerName, account.visitCode, account.supplierCode, account.supplierName, account.employeeCode, account.employeeName, account.productCode, account.productName, account.qty, account.total, account.paid, account.due, account.paymentMethod, account.paymentDetails, account.balance, account.notes]));
