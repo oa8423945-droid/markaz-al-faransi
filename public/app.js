@@ -49,6 +49,7 @@ let partChoiceCounter = 0;
 let financialPeriod = 'daily';
 let dailyClosingVisible = false;
 let statementPeriod = 'daily';
+let supplierDebtsVisible = false;
 
 async function request(url, options) {
   const response = await fetch(url, { headers: { 'Content-Type': 'application/json' }, ...options });
@@ -101,12 +102,13 @@ function renderDashboard() {
   const monthlyIncome = monthVisits.reduce((sum, visit) => sum + visit.total, 0);
   const goodsProfit = monthVisits.reduce((sum, visit) => sum + Math.max(0, visit.partsTotal - visit.partsCost), 0);
   const laborProfit = monthVisits.reduce((sum, visit) => sum + visit.labor, 0);
+  const currentCenterBalance = state.accounts.length ? Number(state.accounts[state.accounts.length - 1].balance || 0) : 0;
   const lowStock = state.inventory.filter((item) => item.qty <= 3);
   $('#newCustomersMonth').textContent = fmt(state.customers.filter((customer) => customer.registeredDate.startsWith(month)).length);
   $('#monthVisitsCount').textContent = fmt(monthVisits.length);
   $('#lowStockCount').textContent = fmt(lowStock.length);
   $('#monthlyIncome').textContent = `${fmt(monthlyIncome)} ج`;
-  $('#availableAmount').textContent = `${fmt(monthlyIncome - monthExpenses - suppliersPaid)} ج`;
+  $('#availableAmount').textContent = `${fmt(currentCenterBalance)} ج`;
   $('#goodsProfit').textContent = `${fmt(goodsProfit)} ج`;
   $('#laborProfit').textContent = `${fmt(laborProfit)} ج`;
   $('#monthlyExpenses').textContent = `${fmt(monthExpenses)} ج`;
@@ -862,7 +864,7 @@ function installAccountsUI() {
   accountActions.innerHTML = '<button id="addManualAccountButton" class="primary" type="button">＋ تسجيل حركة</button><button id="financialSummariesButton" class="primary" type="button">ملخصات مالية</button>';
   const summaries = document.createElement('div');
   summaries.id = 'financialSummariesView'; summaries.className = 'hidden';
-  summaries.innerHTML = `<div class="financial-summary-head"><button id="financialSummaryBack" class="back-btn" type="button">→ رجوع للحسابات</button><div><h1>الملخصات المالية</h1><p id="financialRangeLabel">ملخص الوضع المالي الحالي.</p></div><label>التاريخ المرجعي<input id="financialSummaryDate" type="date"></label></div><div class="financial-period-tabs main-period-tabs"><button class="active" data-financial-period="daily">يومي</button><button data-financial-period="weekly">أسبوعي</button><button data-financial-period="monthly">شهري</button><button data-financial-period="quarterly">ربع سنوي</button><button data-financial-period="halfyear">نصف سنوي</button><button data-financial-period="yearly">سنوي</button></div><div class="financial-export-actions"><button id="dailyClosingButton" class="secondary" type="button">قفل اليومية</button><button id="accountStatementButton" class="secondary" type="button">كشف حساب</button></div><div id="financialSummaryContent"></div><div id="dailyClosingView" class="hidden"></div><div id="accountStatementView" class="hidden"></div>`;
+  summaries.innerHTML = `<div class="financial-summary-head"><button id="financialSummaryBack" class="back-btn" type="button">→ رجوع للحسابات</button><div><h1>الملخصات المالية</h1><p id="financialRangeLabel">ملخص الوضع المالي الحالي.</p></div><label>التاريخ المرجعي<input id="financialSummaryDate" type="date"></label></div><div class="financial-period-tabs main-period-tabs"><button class="active" data-financial-period="daily">يومي</button><button data-financial-period="weekly">أسبوعي</button><button data-financial-period="monthly">شهري</button><button data-financial-period="quarterly">ربع سنوي</button><button data-financial-period="halfyear">نصف سنوي</button><button data-financial-period="yearly">سنوي</button></div><div class="financial-export-actions"><button id="dailyClosingButton" class="secondary" type="button">قفل اليومية</button><button id="accountStatementButton" class="secondary" type="button">كشف حساب</button><button id="supplierDebtsButton" class="secondary" type="button">ديون الموردين</button></div><div id="financialSummaryContent"></div><div id="dailyClosingView" class="hidden"></div><div id="accountStatementView" class="hidden"></div><div id="supplierDebtsView" class="hidden"></div>`;
   page.appendChild(summaries);
   const dialog = document.createElement('dialog');
   dialog.id = 'manualAccountDialog';
@@ -878,6 +880,7 @@ function installAccountsUI() {
   $('#financialSummaryDate').addEventListener('change', renderFinancialSummaries);
   $$('#financialSummariesView [data-financial-period]').forEach((button) => button.addEventListener('click', () => { financialPeriod = button.dataset.financialPeriod; dailyClosingVisible = false; $$('#financialSummariesView [data-financial-period]').forEach((item) => item.classList.toggle('active', item === button)); renderFinancialSummaries(); }));
   $('#accountStatementButton').addEventListener('click', () => { $('#accountStatementView').classList.toggle('hidden'); statementPeriod = 'daily'; renderFinancialSummaries(); });
+  $('#supplierDebtsButton').addEventListener('click', () => { supplierDebtsVisible = !supplierDebtsVisible; $('#accountStatementView').classList.add('hidden'); renderFinancialSummaries(); });
   $('#dailyClosingButton').addEventListener('click', () => {
     dailyClosingVisible = !dailyClosingVisible;
     if (dailyClosingVisible) {
@@ -904,7 +907,7 @@ function installAccountsUI() {
 
 function toggleDownloadChoices(show) {
   $('#downloadChoicesView').classList.toggle('hidden', !show);
-  ['.financial-summary-head','.financial-export-actions','#financialSummaryContent','#dailyClosingView','#accountStatementView'].forEach((selector) => $('#financialSummariesView').querySelector(selector)?.classList.toggle('download-page-hidden', show));
+  ['.financial-summary-head','.financial-export-actions','#financialSummaryContent','#dailyClosingView','#accountStatementView','#supplierDebtsView'].forEach((selector) => $('#financialSummariesView').querySelector(selector)?.classList.toggle('download-page-hidden', show));
 }
 
 function openFinancialSummaries() {
@@ -969,8 +972,14 @@ function renderFinancialSummaries() {
   const statementRows = statementAccounts.map((account) => `<tr class="account-row" data-account-code="${esc(account.code)}"><td>${esc(account.executionDate || account.date)}</td><td>${esc(account.description || '—')}</td><td>${esc(account.type)}</td><td><b>${esc(account.code)}</b></td><td>${esc(account.notes || '—')}</td><td>${account.direction === 'صادر' ? `${fmt(account.paid)} ج` : '—'}</td><td>${account.direction === 'وارد' ? `${fmt(account.paid)} ج` : '—'}</td><td><b>${fmt(account.balance)} ج</b></td></tr>`).join('');
   const statementQuery = `from=${encodeURIComponent(statementRange.from)}&to=${encodeURIComponent(statementRange.to)}&title=${encodeURIComponent(`كشف الحساب — ${statementRange.title}`)}`;
   $('#accountStatementView').innerHTML = `<div class="statement-head"><div><h2>كشف الحساب</h2><p>من ${statementRange.from} إلى ${statementRange.to}</p></div><details class="download-menu"><summary>تنزيل كشف الحساب</summary><div><a href="/api/financial-report?${statementQuery}&format=pdf" target="_blank">تنزيل PDF</a><a href="/api/financial-report?${statementQuery}&format=xlsx" download>تنزيل Excel</a></div></details></div><div class="financial-period-tabs statement-period-tabs"><button class="${statementPeriod === 'daily' ? 'active' : ''}" data-statement-period="daily">يومي</button><button class="${statementPeriod === 'weekly' ? 'active' : ''}" data-statement-period="weekly">أسبوعي</button><button class="${statementPeriod === 'monthly' ? 'active' : ''}" data-statement-period="monthly">شهري</button><button class="${statementPeriod === 'quarterly' ? 'active' : ''}" data-statement-period="quarterly">ربع سنوي</button><button class="${statementPeriod === 'halfyear' ? 'active' : ''}" data-statement-period="halfyear">نصف سنوي</button><button class="${statementPeriod === 'yearly' ? 'active' : ''}" data-statement-period="yearly">سنوي</button></div><div class="financial-report-section"><h2>${statementRange.title}</h2><div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>البيان</th><th>نوع الحركة</th><th>كود الحركة</th><th>الملاحظات</th><th>مدين</th><th>دائن</th><th>الرصيد بعد العملية</th></tr></thead><tbody>${statementRows || '<tr><td colspan="8">لا توجد حركات في هذه الفترة.</td></tr>'}</tbody></table></div></div>`;
+  const supplierDebtRows = state.suppliers.filter((supplier) => Number(supplier.paid || 0) + Number(supplier.due || 0) > 0).sort((first, second) => Number(second.due || 0) - Number(first.due || 0));
+  const supplierDebtTotals = supplierDebtRows.reduce((totals, supplier) => ({ paid: totals.paid + Number(supplier.paid || 0), due: totals.due + Number(supplier.due || 0) }), { paid: 0, due: 0 });
+  $('#supplierDebtsButton').textContent = supplierDebtsVisible ? 'إغلاق ديون الموردين' : 'ديون الموردين';
+  $('#supplierDebtsView').classList.toggle('hidden', !supplierDebtsVisible);
+  $('#supplierDebtsView').innerHTML = `<div class="statement-head supplier-debts-head"><div><h2>ديون الموردين</h2><p>إجمالي ما تم دفعه والمتبقي لكل مورد.</p></div><details class="download-menu"><summary>تنزيل</summary><div><a href="/api/supplier-debts?format=pdf" download>تنزيل PDF</a><a href="/api/supplier-debts?format=xlsx" download>تنزيل Excel</a></div></details></div><div class="financial-report-section"><div class="table-wrap"><table><thead><tr><th>كود المورد</th><th>اسم المورد</th><th>إجمالي المبلغ</th><th>المبلغ المدفوع</th><th>المبلغ المتبقي</th></tr></thead><tbody>${supplierDebtRows.map((supplier) => `<tr class="supplier-debt-row" data-supplier-code="${esc(supplier.code)}"><td><b>${esc(supplier.code || '—')}</b></td><td>${esc(supplier.name || '—')}</td><td>${fmt(Number(supplier.paid || 0) + Number(supplier.due || 0))} ج</td><td>${fmt(supplier.paid)} ج</td><td><b>${fmt(supplier.due)} ج</b></td></tr>`).join('') || '<tr><td colspan="5">لا توجد ديون مسجلة على الموردين.</td></tr>'}<tr class="supplier-debt-total"><td></td><td><b>الإجمالي</b></td><td><b>${fmt(supplierDebtTotals.paid + supplierDebtTotals.due)} ج</b></td><td><b>${fmt(supplierDebtTotals.paid)} ج</b></td><td><b>${fmt(supplierDebtTotals.due)} ج</b></td></tr></tbody></table></div></div>`;
   $$('#accountStatementView [data-statement-period]').forEach((button) => button.addEventListener('click', () => { statementPeriod = button.dataset.statementPeriod; renderFinancialSummaries(); }));
   $$('#accountStatementView .account-row').forEach((row) => row.addEventListener('click', () => showAccountDetails(row.dataset.accountCode)));
+  $$('#supplierDebtsView .supplier-debt-row').forEach((row) => row.addEventListener('click', () => { const supplier = state.suppliers.find((item) => item.code === row.dataset.supplierCode); state.selectedSupplierName = supplier?.name || ''; go('suppliers'); showSupplierDetails(row.dataset.supplierCode); }));
 }
 
 function openDebtDialog(mode = 'center') {
