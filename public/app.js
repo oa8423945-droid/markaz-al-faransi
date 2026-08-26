@@ -1,5 +1,5 @@
-Warning: truncated output (original token count: 30806)
-Total output lines: 1327
+Warning: truncated output (original token count: 31005)
+Total output lines: 1338
 
 const state = { customers: [], visits: [], inventory: [], suppliers: [], employees: [], expenses: [], movements: [], accounts: [], selectedCustomer: null, movementMode: '', selectedProduct: null, productMovementMode: '', selectedSupplierName: '' };
 const $ = (selector) => document.querySelector(selector);
@@ -789,13 +789,7 @@ function installEmployeesUI() {
   details.innerHTML = '<div class="employee-details-dialog"><button type="button" class="dialog-close">×</button><div id="employeeDetailsContent"></div></div>';
   document.body.appendChild(details); details.querySelector('.dialog-close').addEventListener('click', () => details.close());
   const statusDialog = document.createElement('dialog'); statusDialog.id = 'employeeStatusDialog';
-  statusDialog.innerHTML = `<form id="employeeStatusForm"><button type="button" class="dialog-close">×</button><input type="hidden" name="employeeCode"><div class="dialog-title"><span>!</span><div><h2>تغيير حالة الموظف</h2><p id="employeeStatusName"></p></div></div><div class="form-grid"><label>الحالة<…806 tokens truncated…اسم</th><th>التليفون</th><th>تاريخ التوظيف</th><th>التخصص</th><th>المشاركات</th><th>المرتب</th><th>عليه</th><th>له</th><th>الحالة</th><th>تاريخ الإيقاف</th><th>السبب</th></tr></thead><tbody>${stopped.map((employee) => employeeTableRow(employee, true)).join('')}</tbody></table></div>` : '<div class="empty-state">لا يوجد موظفون موقوفون عن العمل.</div>';
-  $$('#stoppedEmployeesTable .employee-row').forEach((row) => row.addEventListener('click', () => showEmployeeDetails(row.dataset.employeeCode)));
-}
-
-function showActiveEmployees() { $('#stoppedEmployeesView').classList.add('hidden'); $('#activeEmployeesView').classList.remove('hidden'); renderEmployees(); }
-
-function showEmployeeDetails(code) {
+  statusDialog.innerHTML = `<form id="employeeStatusForm"><button type="button" class="dialog-close">×</button><input type="hidden" name="employeeCode"><div class="dialog-title"><span>!</span><div><h2>تغيير حالة الموظف</h2><p id="employeeStatusName"></p></div></div><div class="form-grid"><label>الحالة<…1005 tokens truncated…) {
   const employee = state.employees.find((item) => item.code === code); if (!employee) return;
   const accounts = state.accounts.filter((account) => account.employeeCode === employee.code);
   const rows = [...accounts].reverse().map((account) => `<tr class="account-row" data-account-code="${esc(account.code)}"><td>${esc(account.executionDate || account.date)}</td><td>${esc(account.type)}</td><td>${esc(account.description)}</td><td>${fmt(account.total)} ج</td><td>${esc(account.direction)}</td></tr>`).join('');
@@ -1081,6 +1075,17 @@ function updateManualDebtHint() {
   else if (customer && (type === 'سداد مديونية' || form.elements.operation.value === 'دين')) label = `المستحق على العميل: ${fmt(customer.dueFromCustomer)} ج · المستحق على المركز: ${fmt(customer.dueFromCenter)} ج`;
   else if (supplier && type === 'سداد مستحقات') label = `المستحق للمورد: ${fmt(supplier.due)} ج`;
   hint.textContent = label; hint.classList.toggle('hidden', !label);
+  updateManualPaymentOptions();
+}
+
+function updateManualPaymentOptions() {
+  const form = $('#manualAccountForm'); if (!form) return;
+  const blocked = ['سداد مديونية', 'سداد مستحقات', 'سداد سلفة موظف', 'دفع مستحق موظف', 'توريد بضاعة'].includes(form.elements.type.value);
+  form.querySelectorAll('.split-payment-method option, select[name="paymentMethod"] option').forEach((option) => {
+    if (option.value === 'آجل') { option.hidden = blocked; option.disabled = blocked; }
+  });
+  form.querySelectorAll('.split-payment-method').forEach((select) => { if (blocked && select.value === 'آجل') select.value = 'نقدي'; });
+  if (blocked && form.elements.paymentMethod?.value === 'آجل') form.elements.paymentMethod.value = 'نقدي';
 }
 
 function updateManualEmployeeFields() {
