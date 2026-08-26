@@ -44,7 +44,8 @@ process.on('SIGINT', () => { clearPidFile(); process.exit(0); });
 process.on('SIGTERM', () => { clearPidFile(); process.exit(0); });
 
 function clean(value) {
-  return String(value ?? '').trim();
+  // Excel/XML لا يقبل أحرف التحكم المخفية؛ حذفها يمنع رسالة Repaired Part عند فتح التصدير.
+  return String(value ?? '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').trim();
 }
 
 function currentTime() {
@@ -107,7 +108,7 @@ function writeSheet(workbook, wanted, headers, objects) {
   const name = findSheetName(workbook, wanted);
   workbook.Sheets[name] = XLSX.utils.aoa_to_sheet([
     headers,
-    ...objects.map((object) => headers.map((header) => object[header] ?? '')),
+    ...objects.map((object) => headers.map((header) => typeof object[header] === 'string' ? clean(object[header]) : (object[header] ?? ''))),
   ]);
   if (!workbook.SheetNames.includes(name)) workbook.SheetNames.push(name);
 }
@@ -498,7 +499,13 @@ async function dailyCloseBuffer(data, fromDate, toDate = fromDate, reportTitle =
 async function rtlWorkbookBuffer(filePath) {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.readFile(filePath);
-  workbook.worksheets.forEach((sheet) => { sheet.views = [{ rightToLeft: true, showGridLines: true }]; });
+  workbook.worksheets.forEach((sheet) => {
+    sheet.views = [{ rightToLeft: true, showGridLines: true }];
+    // أعد كتابة النصوص بعد تنظيف أحرف XML غير المسموح بها في ملف البيانات الأصلي.
+    sheet.eachRow((row) => row.eachCell((cell) => {
+      if (typeof cell.value === 'string') cell.value = clean(cell.value);
+    }));
+  });
   return Buffer.from(await workbook.xlsx.writeBuffer());
 }
 
