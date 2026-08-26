@@ -605,8 +605,8 @@ function inventoryMovementRows(data, from = '', to = '') {
 async function inventoryMovementsWorkbook(data, from, to) {
   const rows = inventoryMovementRows(data, from, to); const workbook = new ExcelJS.Workbook(); const sheet = workbook.addWorksheet('جرد حركة المخزن', { views: [{ rightToLeft: true, showGridLines: true }] });
   sheet.addRow(['جرد حركة المخزن', `من ${from} إلى ${to}`]); sheet.addRow([]); sheet.addRow(['كود الحركة','اليوم','الوقت','نوع الحركة','كود المنتج','بيان المنتج','الكمية','المبلغ','كود العميل','كود المورد']);
-  rows.forEach((r) => sheet.addRow([r.code,r.date,r.time,r.direction,r.productCode,r.productName,r.qty,r.amount,r.customerCode,r.supplierCode]));
-  sheet.getRow(3).eachCell((c) => { c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFD966'}}; c.font={name:'Tahoma',size:16,bold:true,color:{argb:'FF111827'}}; c.alignment={horizontal:'center'}; });
+  rows.forEach((r) => { const row = sheet.addRow([r.code,r.date,r.time,r.direction,r.productCode,r.productName,r.qty,r.amount,r.customerCode,r.supplierCode]); const color = r.direction === 'صادر' ? 'FFFDE2E2' : 'FFE2F7E9'; row.eachCell((cell) => { cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:color}}; }); });
+  sheet.getRow(1).font={name:'Tahoma',size:16,bold:true}; sheet.getRow(1).alignment={horizontal:'right'}; sheet.getRow(3).eachCell((c) => { c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFD966'}}; c.font={name:'Tahoma',size:16,bold:true,color:{argb:'FF111827'}}; c.alignment={horizontal:'center'}; });
   [18,14,12,14,16,42,12,16,16,16].forEach((w,i)=>sheet.getColumn(i+1).width=w); sheet.getColumn(7).numFmt='#,##0'; sheet.getColumn(8).numFmt='#,##0.00'; return Buffer.from(await workbook.xlsx.writeBuffer());
 }
 
