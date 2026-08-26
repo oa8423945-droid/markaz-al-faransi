@@ -51,6 +51,13 @@ function currentTime() {
   return new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 }
 
+// PDFKit يعكس أقواس الإنجليزي وسط النص العربي؛ نحول محتواها إلى جزء واضح بين شرطات.
+function pdfRtlText(doc, text, x, y, width, options = {}) {
+  const value = String(text ?? '').replace(/\(([^()]*)\)/g, ' — $1 — ').replace(/\s*—\s*—\s*/g, ' — ').replace(/\s+/g, '\u00A0');
+  const style = () => doc.font(options.bold ? 'ArabicBold' : 'Arabic').fontSize(options.size || 9).fillColor(options.color || '#111827');
+  style().text(value, x, y, { width, align: 'right', lineGap: options.lineGap || 0 });
+}
+
 function normalizedPlate(value) {
   return clean(value).replace(/[\s-]/g, '').toLocaleLowerCase('ar-EG');
 }
@@ -560,7 +567,7 @@ function supplierDebtsPdf(data) {
     doc.registerFont('Arabic', regular); doc.registerFont('ArabicBold', bold);
     const reverse = (value) => [...String(value)].reverse().join('');
     const money = (value) => Number(value || 0).toFixed(2);
-    const rtl = (text, x, y, width, options = {}) => doc.font(options.bold ? 'ArabicBold' : 'Arabic').fontSize(options.size || 9).fillColor(options.color || '#111827').text(String(text).replace(/\s+/g, '\u00A0'), x, y, { width, align: 'right' });
+    const rtl = (text, x, y, width, options = {}) => pdfRtlText(doc, text, x, y, width, options);
     // يرسم PDF من اليسار لليمين، لذا نعكس المصفوفة ليبدأ الجدول فعليًا بكود المورد من اليمين.
     const left = 42; const width = doc.page.width - 84; const columns = [90, 90, 95, 155, 85];
     const drawHeader = (continued = false) => { rtl(continued ? 'تقرير ديون الموردين - تابع' : 'تقرير ديون الموردين', left, 45, width, { bold: true, size: 20, color: '#17243C' }); rtl(`تاريخ التقرير: ${reverse(new Date().toISOString().slice(0, 10))}`, left, 75, width, { size: 9, color: '#667085' }); doc.moveTo(left, 96).lineTo(left + width, 96).lineWidth(3).strokeColor('#F7941D').stroke(); };
@@ -614,7 +621,7 @@ function inventoryAuditPdf(data) {
     const bold = ['tahomabd.ttf', 'arialbd.ttf'].map((name) => path.join(fonts, name)).find(fs.existsSync);
     if (!regular || !bold) throw new Error('تعذر العثور على خط عربي مناسب لإنشاء التقرير.');
     doc.registerFont('Arabic', regular); doc.registerFont('ArabicBold', bold);
-    const rtl = (text, x, y, width, options = {}) => doc.font(options.bold ? 'ArabicBold' : 'Arabic').fontSize(options.size || 9).fillColor(options.color || '#111827').text(String(text).replace(/\s+/g, '\u00A0'), x, y, { width, align: 'right', lineGap: options.lineGap || 0 });
+    const rtl = (text, x, y, width, options = {}) => pdfRtlText(doc, text, x, y, width, options);
     const reverse = (value) => [...String(value)].reverse().join('');
     const money = (value) => Number(value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     // كود المنتج هو أول عمود عربيًا؛ لذلك يوضع في أقصى اليمين عند الرسم.
@@ -673,7 +680,7 @@ function externalDebtsPdf(data) {
     const bold = ['tahomabd.ttf', 'arialbd.ttf'].map((name) => path.join(fonts, name)).find(fs.existsSync);
     if (!regular || !bold) throw new Error('تعذر العثور على خط عربي مناسب لإنشاء التقرير.');
     doc.registerFont('Arabic', regular); doc.registerFont('ArabicBold', bold);
-    const rtl = (text, x, y, width, options = {}) => doc.font(options.bold ? 'ArabicBold' : 'Arabic').fontSize(options.size || 9).fillColor(options.color || '#111827').text(String(text).replace(/\s+/g, '\u00A0'), x, y, { width, align: 'right', lineGap: options.lineGap || 0 });
+    const rtl = (text, x, y, width, options = {}) => pdfRtlText(doc, text, x, y, width, options);
     const reverse = (value) => [...String(value)].reverse().join(''); const money = (value) => Number(value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const pdfStatement = (value) => String(value).replace(/[A-Za-z0-9][A-Za-z0-9 .-]*/g, (latinText) => reverse(latinText));
     const left = 40; const width = doc.page.width - 80; const columns = [145, 280, 90];
@@ -729,10 +736,7 @@ function visitInvoicePdf(visit, customer) {
       const rtlNumber = (value) => [...String(value)].reverse().join('');
       const money = (value) => `${rtlNumber(Number(value || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }))}\u00A0جنيه`;
       const valueText = (value) => clean(value) || '—';
-      const rtl = (text, x, y, width, options = {}) => {
-        doc.font(options.bold ? 'ArabicBold' : 'Arabic').fontSize(options.size || 10).fillColor(options.color || '#111827')
-          .text(String(text).replace(/\s+/g, '\u00A0'), x, y, { width, align: 'right', lineGap: options.lineGap || 0 });
-      };
+      const rtl = (text, x, y, width, options = {}) => pdfRtlText(doc, text, x, y, width, { size: 10, ...options });
       const logoPath = path.join(PUBLIC, 'invoice-logo.b64');
       if (fs.existsSync(logoPath)) {
         const logo = Buffer.from(fs.readFileSync(logoPath, 'utf8').trim(), 'base64');
