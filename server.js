@@ -561,13 +561,14 @@ function supplierDebtsPdf(data) {
     const reverse = (value) => [...String(value)].reverse().join('');
     const money = (value) => Number(value || 0).toFixed(2);
     const rtl = (text, x, y, width, options = {}) => doc.font(options.bold ? 'ArabicBold' : 'Arabic').fontSize(options.size || 9).fillColor(options.color || '#111827').text(String(text).replace(/\s+/g, '\u00A0'), x, y, { width, align: 'right' });
-    const left = 42; const width = doc.page.width - 84; const columns = [75, 150, 94, 94, 94];
+    // يرسم PDF من اليسار لليمين، لذا نعكس المصفوفة ليبدأ الجدول فعليًا بكود المورد من اليمين.
+    const left = 42; const width = doc.page.width - 84; const columns = [90, 90, 95, 155, 85];
     const drawHeader = (continued = false) => { rtl(continued ? 'تقرير ديون الموردين - تابع' : 'تقرير ديون الموردين', left, 45, width, { bold: true, size: 20, color: '#17243C' }); rtl(`تاريخ التقرير: ${reverse(new Date().toISOString().slice(0, 10))}`, left, 75, width, { size: 9, color: '#667085' }); doc.moveTo(left, 96).lineTo(left + width, 96).lineWidth(3).strokeColor('#F7941D').stroke(); };
-    const drawTableHeader = (y) => { const labels = ['كود المورد', 'اسم المورد', 'إجمالي المبلغ', 'المبلغ المدفوع', 'المبلغ المتبقي']; let x = left; labels.forEach((label, index) => { doc.rect(x, y, columns[index], 30).fillAndStroke('#FFD966', '#D9A900'); rtl(label, x + 4, y + 9, columns[index] - 8, { bold: true, size: 8 }); x += columns[index]; }); return y + 30; };
+    const drawTableHeader = (y) => { const labels = ['المبلغ المتبقي', 'المبلغ المدفوع', 'إجمالي المبلغ', 'اسم المورد', 'كود المورد']; let x = left; labels.forEach((label, index) => { doc.rect(x, y, columns[index], 30).fillAndStroke('#FFD966', '#D9A900'); rtl(label, x + 4, y + 9, columns[index] - 8, { bold: true, size: 8 }); x += columns[index]; }); return y + 30; };
     drawHeader(); let y = drawTableHeader(112);
     const drawDataRow = (values, total = false) => { if (y > 750) { doc.addPage(); drawHeader(true); y = drawTableHeader(112); } let x = left; values.forEach((value, index) => { doc.rect(x, y, columns[index], 29).fillAndStroke(total ? '#FFF4CC' : '#FFFFFF', '#E5E7EB'); rtl(value, x + 4, y + 9, columns[index] - 8, { bold: total, size: 8 }); x += columns[index]; }); y += 29; };
-    rows.forEach((supplier) => drawDataRow([supplier.code || '—', supplier.name || '—', money(supplier.total), money(supplier.paid), money(supplier.due)]));
-    drawDataRow(['', 'الإجمالي', money(rows.reduce((sum, item) => sum + item.total, 0)), money(rows.reduce((sum, item) => sum + item.paid, 0)), money(rows.reduce((sum, item) => sum + item.due, 0))], true);
+    rows.forEach((supplier) => drawDataRow([money(supplier.due), money(supplier.paid), money(supplier.total), supplier.name || '—', supplier.code || '—']));
+    drawDataRow([money(rows.reduce((sum, item) => sum + item.due, 0)), money(rows.reduce((sum, item) => sum + item.paid, 0)), money(rows.reduce((sum, item) => sum + item.total, 0)), 'الإجمالي', ''], true);
     rtl('المركز الفرنسي - تقرير مالي داخلي', left, 775, width, { bold: true, size: 8, color: '#667085' }); doc.end();
   } catch (error) { reject(error); } });
 }
@@ -616,13 +617,14 @@ function inventoryAuditPdf(data) {
     const rtl = (text, x, y, width, options = {}) => doc.font(options.bold ? 'ArabicBold' : 'Arabic').fontSize(options.size || 9).fillColor(options.color || '#111827').text(String(text).replace(/\s+/g, '\u00A0'), x, y, { width, align: 'right', lineGap: options.lineGap || 0 });
     const reverse = (value) => [...String(value)].reverse().join('');
     const money = (value) => Number(value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const left = 40; const width = doc.page.width - 80; const columns = [88, 262, 92, 114];
+    // كود المنتج هو أول عمود عربيًا؛ لذلك يوضع في أقصى اليمين عند الرسم.
+    const left = 40; const width = doc.page.width - 80; const columns = [105, 80, 245, 85];
     const header = (continued = false) => { rtl(continued ? 'جرد المخزن - تابع' : 'تقرير جرد المخزن', left, 44, width, { bold: true, size: 20, color: '#17243C' }); rtl(`تاريخ التقرير: ${reverse(new Date().toISOString().slice(0, 10))}`, left, 74, width, { size: 9, color: '#667085' }); doc.moveTo(left, 96).lineTo(left + width, 96).lineWidth(3).strokeColor('#F7941D').stroke(); };
-    const tableHeader = (y) => { const labels = ['كود المنتج', 'البيان', 'الكمية الحالية', 'قيمة المخزون']; let x = left; labels.forEach((label, index) => { doc.rect(x, y, columns[index], 30).fillAndStroke('#FFD966', '#D9A900'); rtl(label, x + 4, y + 9, columns[index] - 8, { bold: true, size: 8 }); x += columns[index]; }); return y + 30; };
+    const tableHeader = (y) => { const labels = ['قيمة المخزون', 'الكمية الحالية', 'البيان', 'كود المنتج']; let x = left; labels.forEach((label, index) => { doc.rect(x, y, columns[index], 30).fillAndStroke('#FFD966', '#D9A900'); rtl(label, x + 4, y + 9, columns[index] - 8, { bold: true, size: 8 }); x += columns[index]; }); return y + 30; };
     header(); let y = tableHeader(112);
-    const drawRow = (values, total = false) => { const height = Math.max(31, doc.heightOfString(String(values[1]), { width: columns[1] - 10, align: 'right' }) + 16); if (y + height > 746) { doc.addPage(); header(true); y = tableHeader(112); } let x = left; values.forEach((value, index) => { doc.rect(x, y, columns[index], height).fillAndStroke(total ? '#FFF4CC' : '#FFFFFF', '#E5E7EB'); rtl(value, x + 5, y + 8, columns[index] - 10, { bold: total, size: index === 1 ? 8 : 8 }); x += columns[index]; }); y += height; };
-    if (rows.length) rows.forEach((item) => drawRow([item.code, item.statement, item.quantity, money(item.value)]));
-    else drawRow(['—', 'لا توجد أصناف في المخزن', '0', '0.00']);
+    const drawRow = (values, total = false) => { const height = Math.max(31, doc.heightOfString(String(values[2]), { width: columns[2] - 10, align: 'right' }) + 16); if (y + height > 746) { doc.addPage(); header(true); y = tableHeader(112); } let x = left; values.forEach((value, index) => { doc.rect(x, y, columns[index], height).fillAndStroke(total ? '#FFF4CC' : '#FFFFFF', '#E5E7EB'); rtl(value, x + 5, y + 8, columns[index] - 10, { bold: total, size: 8 }); x += columns[index]; }); y += height; };
+    if (rows.length) rows.forEach((item) => drawRow([money(item.value), item.quantity, item.statement, item.code]));
+    else drawRow(['0.00', '0', 'لا توجد أصناف في المخزن', '—']);
     y += 12;
     const totalValue = rows.reduce((sum, item) => sum + item.value, 0);
     doc.roundedRect(left, y, width, 50, 8).fillAndStroke('#F8FAFC', '#DDE3EC');
