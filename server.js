@@ -409,6 +409,22 @@ function ensureStoredEmployeeSchema() {
   saveData(data.customers, data.visits, null, null, null, null, data.employees);
 }
 
+function partsAndQuantities(partsCodes, inventory) {
+  const text = clean(partsCodes);
+  if (!text) return '—';
+  const byCode = new Map((inventory || []).map((item) => [normalizedAutoCode(item.code, 'P').toLocaleLowerCase('en-US'), item]));
+  return text.split(/[،,]+/).map((entry) => {
+    const itemText = clean(entry).replace(/^\(+|\)+$/g, '').trim();
+    const match = itemText.match(/^(.*?)\s*(?:x|×)\s*(\d+(?:\.\d+)?)\s*$/i);
+    const code = clean(match ? match[1] : itemText);
+    const quantity = match ? match[2] : '';
+    const product = byCode.get(normalizedAutoCode(code, 'P').toLocaleLowerCase('en-US'));
+    if (!product) return quantity ? `${code} × ${quantity}` : code;
+    const statement = [clean(product.name), clean(product.details)].filter(Boolean).join(' — ');
+    return `${statement || code}${quantity ? ` × ${quantity}` : ''}`;
+  }).filter(Boolean).join(' | ') || text;
+}
+
 function dailyCloseWorkbook(data, fromDate, toDate = fromDate, reportTitle = 'إقفال اليومية') {
   const accounts = data.accounts.filter((account) => {
     const date = account.executionDate || account.date;
@@ -435,7 +451,7 @@ function dailyCloseWorkbook(data, fromDate, toDate = fromDate, reportTitle = 'إ
   const visitsWithParts = data.visits.filter((visit) => visit.date >= fromDate && visit.date <= toDate && visit.partsCodes);
   addSection('قطع الغيار المستخدمة في الزيارات', ['العميل', 'كود العميل', 'كود الزيارة', 'القطع والكميات', 'تكلفة الشراء', 'سعر البيع', 'هامش الربح'], visitsWithParts.map((visit) => {
     const customer = data.customers.find((item) => item.code === visit.customerCode) || {};
-    return [customer.name, visit.customerCode, visit.code, visit.partsCodes, visit.partsCost || 0, visit.partsTotal || 0, (visit.partsTotal || 0) - (visit.partsCost || 0)];
+    return [customer.name, visit.customerCode, visit.code, partsAndQuantities(visit.partsCodes, data.inventory), visit.partsCost || 0, visit.partsTotal || 0, (visit.partsTotal || 0) - (visit.partsCost || 0)];
   }));
   const supplierPayments = accounts.filter((account) => account.type === 'سداد مستحقات');
   addSection('دفعات الموردين', ['المورد', 'كود المورد', 'المبلغ', 'طريقة الدفع', 'البيان'], supplierPayments.map((account) => [account.supplierName, account.supplierCode, account.paid, account.paymentMethod, account.description]));
@@ -459,33 +475,13 @@ async function dailyCloseBuffer(data, fromDate, toDate = fromDate, reportTitle =
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(raw);
   const sheet = workbook.getWorksheet('إقفال اليومية');
-  sheet.views = [{ rightToLeft: true, state: 'frozen', ySplit: 2, showGridLines: false }];
+  // نُبقي شكل ملف Excel بسيطاً مثل النسخة المرجعية، مع اتجاه عربي فقط.
+  sheet.views = [{ rightToLeft: true, showGridLines: true }];
   const maxColumns = 20;
-  const sectionTitles = new Set(['الملخص السريع', 'الوارد', 'الصادر والخصومات', 'المسحوبات والمصروفات التشغيلية', 'المصروفات الإضافية', 'قطع الغيار المستخدمة في الزيارات', 'دفعات الموردين', 'المبيعات', 'كشف الحساب', 'كل الحركات المالية']);
-  sheet.columns = Array.from({ length: maxColumns }, (_, index) => ({ width: index === 1 ? 32 : 19 }));
   sheet.eachRow((row, rowNumber) => {
-    const populated = row.values.slice(1).filter((value) => value !== null && value !== undefined && value !== '');
-    const sectionHeading = populated.length === 1 && sectionTitles.has(populated[0]);
-    const reportHeading = rowNumber === 1;
     for (let column = 1; column <= maxColumns; column += 1) {
       const cell = row.getCell(column);
       if (typeof cell.value === 'string') cell.value = cell.value.replace(/(\d{4})-(\d{2})-(\d{2})/g, '$1/$2/$3');
-      cell.alignment = { horizontal: 'right', vertical: 'middle', wrapText: true };
-      cell.font = { name: 'Tahoma', size: 12, color: { argb: 'FF111827' } };
-      if (typeof cell.value === 'number') cell.numFmt = '#,##0.00 "ج"';
-    }
-    if (sectionHeading || reportHeading) {
-      row.height = reportHeading ? 30 : 27;
-      if (sectionHeading) sheet.mergeCells(`A${rowNumber}:G${rowNumber}`);
-      for (let column = 1; column <= maxColumns; column += 1) {
-        const cell = row.getCell(column);
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
-        cell.font = { name: 'Tahoma', size: 16, bold: true, color: { argb: 'FF111111' } };
-        cell.border = { bottom: { style: 'medium', color: { argb: 'FFE2A900' } } };
-      }
-    } else if (populated.length > 1 && populated.every((value) => typeof value === 'string')) {
-      row.font = { name: 'Tahoma', size: 12, bold: true, color: { argb: 'FF17243C' } };
-      row.eachCell((cell) => { cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F7FA' } }; });
     }
   });
   workbook.creator = 'المركز الفرنسي';
@@ -510,7 +506,7 @@ function reportHtml(data, fromDate, toDate, title) {
   const section = (heading, headers, bodyRows, empty = 'لا توجد بيانات') => `<section><h2>${heading}</h2><table><thead><tr>${headers.map((header) => `<th>${header}</th>`).join('')}</tr></thead><tbody>${bodyRows || `<tr><td colspan="${headers.length}">${empty}</td></tr>`}</tbody></table></section>`;
   const incomingRows = accounts.filter((a) => a.direction === 'وارد').map((a) => `<tr><td>${escape(a.executionDate || a.date)}</td><td>${escape(a.time || '—')}</td><td>${escape(a.description)}</td><td>${escape(a.type)}</td><td>${escape(a.code)}</td><td>${a.paid}</td><td>${escape(a.paymentMethod || '—')}</td></tr>`).join('');
   const outgoingRows = accounts.filter((a) => a.direction === 'صادر').map((a) => `<tr><td>${escape(a.executionDate || a.date)}</td><td>${escape(a.time || '—')}</td><td>${escape(a.description)}</td><td>${escape(a.type)}</td><td>${escape(a.code)}</td><td>${a.paid}</td><td>${escape(a.paymentMethod || '—')}</td></tr>`).join('');
-  const partRows = parts.map((visit) => { const customer = data.customers.find((item) => item.code === visit.customerCode) || {}; const cost = Number(visit.partsCost || 0); const sale = Number(visit.partsTotal || 0); return `<tr><td>${escape(customer.name || '—')}</td><td>${escape(visit.code)}</td><td>${escape(visit.partsCodes)}</td><td>${cost}</td><td>${sale}</td><td>${sale - cost}</td></tr>`; }).join('');
+  const partRows = parts.map((visit) => { const customer = data.customers.find((item) => item.code === visit.customerCode) || {}; const cost = Number(visit.partsCost || 0); const sale = Number(visit.partsTotal || 0); return `<tr><td>${escape(customer.name || '—')}</td><td>${escape(visit.code)}</td><td>${escape(partsAndQuantities(visit.partsCodes, data.inventory))}</td><td>${cost}</td><td>${sale}</td><td>${sale - cost}</td></tr>`; }).join('');
   return `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${escape(title)}</title><style>body{font-family:Tahoma,Arial;margin:28px;color:#111;background:#fff}h1{text-align:center;color:#17243c;margin:0 0 4px}p{text-align:center;color:#667085}.summary{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:20px 0}.summary div{border:1px solid #d7dde7;border-radius:8px;padding:11px;text-align:center;background:#f8fafc}.summary b{display:block;font-size:18px;margin-top:6px;color:#111827}section{border:1px solid #d7dde7;border-radius:10px;margin:16px 0;padding:12px;page-break-inside:avoid}h2{font-size:15px;border-right:4px solid #2676ee;padding-right:8px;margin:0 0 10px;color:#17243c}table{border-collapse:collapse;width:100%;font-size:10px}th,td{border:1px solid #d7dde7;padding:7px;text-align:right}th{background:#eef5ff;color:#17243c}footer{border-top:2px solid #f7941d;margin-top:22px;padding-top:10px;text-align:center;color:#667085;font-size:10px}@media print{button{display:none}body{margin:8mm}.summary{grid-template-columns:repeat(5,1fr)}}button{background:#2676ee;color:#fff;border:0;padding:9px 15px;border-radius:7px;font-weight:bold;cursor:pointer}</style></head><body><button onclick="window.print()">طباعة / حفظ PDF</button><h1>${escape(title)}</h1><p>${escape(fromDate)} — ${escape(toDate)}</p><div class="summary"><div>رصيد قبل الفترة<b>${beforeBalance}</b></div><div>الإضافات / الوارد<b>${incoming}</b></div><div>الخصومات / الصادر<b>${outgoing}</b></div><div>صافي الحركة<b>${incoming - outgoing}</b></div><div>الرصيد الحالي<b>${balance}</b></div></div>${section('الوارد', ['التاريخ','الوقت','البيان','النوع','كود الحركة','المبلغ','طريقة الدفع'], incomingRows)}${section('الصادر والخصومات', ['التاريخ','الوقت','البيان','النوع','كود الحركة','المبلغ','طريقة الدفع'], outgoingRows)}${section('قطع الغيار المستخدمة', ['العميل','كود الزيارة','القطع والكميات','تكلفة الشراء','سعر البيع','هامش الربح'], partRows)}<footer>المركز الفرنسي - تقرير يومية مالي</footer><script>window.addEventListener('load',()=>setTimeout(()=>window.print(),300))</script></body></html>`;
 }
 
@@ -573,6 +569,67 @@ function supplierDebtsPdf(data) {
     rows.forEach((supplier) => drawDataRow([supplier.code || '—', supplier.name || '—', money(supplier.total), money(supplier.paid), money(supplier.due)]));
     drawDataRow(['', 'الإجمالي', money(rows.reduce((sum, item) => sum + item.total, 0)), money(rows.reduce((sum, item) => sum + item.paid, 0)), money(rows.reduce((sum, item) => sum + item.due, 0))], true);
     rtl('المركز الفرنسي - تقرير مالي داخلي', left, 775, width, { bold: true, size: 8, color: '#667085' }); doc.end();
+  } catch (error) { reject(error); } });
+}
+
+function inventoryAuditRows(data) {
+  return (data.inventory || []).map((item) => {
+    const quantity = Number(item.qty) || 0;
+    const unitCost = Number(item.buy) || 0;
+    return {
+      code: clean(item.code) || '—',
+      statement: [clean(item.name), clean(item.details)].filter(Boolean).join(' — ') || '—',
+      quantity,
+      value: quantity * unitCost,
+    };
+  }).sort((first, second) => first.statement.localeCompare(second.statement, 'ar'));
+}
+
+async function inventoryAuditWorkbook(data) {
+  const rows = inventoryAuditRows(data);
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'المركز الفرنسي'; workbook.created = new Date();
+  const sheet = workbook.addWorksheet('جرد المخزن', { views: [{ rightToLeft: true, showGridLines: true }] });
+  sheet.addRow(['جرد المخزن', `تاريخ التقرير: ${new Date().toISOString().slice(0, 10)}`]);
+  sheet.addRow([]);
+  sheet.addRow(['كود المنتج', 'البيان', 'الكمية الحالية', 'قيمة المخزون']);
+  rows.forEach((item) => sheet.addRow([item.code, item.statement, item.quantity, item.value]));
+  sheet.addRow([]);
+  sheet.addRow(['إجمالي الأصناف الموجودة', rows.length]);
+  const totalRow = sheet.addRow(['إجمالي قيمة البضاعة', { formula: `SUM(D4:D${Math.max(4, rows.length + 3)})`, result: rows.reduce((sum, item) => sum + item.value, 0) }]);
+  sheet.getColumn(1).width = 18; sheet.getColumn(2).width = 44; sheet.getColumn(3).width = 18; sheet.getColumn(4).width = 22;
+  sheet.getColumn(3).numFmt = '#,##0'; sheet.getColumn(4).numFmt = '#,##0.00';
+  totalRow.getCell(2).numFmt = '#,##0.00';
+  return Buffer.from(await workbook.xlsx.writeBuffer());
+}
+
+function inventoryAuditPdf(data) {
+  return new Promise((resolve, reject) => { try {
+    const rows = inventoryAuditRows(data);
+    const doc = new PDFDocument({ size: 'A4', margins: { top: 38, right: 40, bottom: 46, left: 40 }, bufferPages: true });
+    const chunks = []; doc.on('data', (chunk) => chunks.push(chunk)); doc.on('end', () => resolve(Buffer.concat(chunks))); doc.on('error', reject);
+    const fonts = path.join(process.env.WINDIR || 'C:\\Windows', 'Fonts');
+    const regular = ['tahoma.ttf', 'arial.ttf'].map((name) => path.join(fonts, name)).find(fs.existsSync);
+    const bold = ['tahomabd.ttf', 'arialbd.ttf'].map((name) => path.join(fonts, name)).find(fs.existsSync);
+    if (!regular || !bold) throw new Error('تعذر العثور على خط عربي مناسب لإنشاء التقرير.');
+    doc.registerFont('Arabic', regular); doc.registerFont('ArabicBold', bold);
+    const rtl = (text, x, y, width, options = {}) => doc.font(options.bold ? 'ArabicBold' : 'Arabic').fontSize(options.size || 9).fillColor(options.color || '#111827').text(String(text).replace(/\s+/g, '\u00A0'), x, y, { width, align: 'right', lineGap: options.lineGap || 0 });
+    const reverse = (value) => [...String(value)].reverse().join('');
+    const money = (value) => Number(value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const left = 40; const width = doc.page.width - 80; const columns = [88, 262, 92, 114];
+    const header = (continued = false) => { rtl(continued ? 'جرد المخزن - تابع' : 'تقرير جرد المخزن', left, 44, width, { bold: true, size: 20, color: '#17243C' }); rtl(`تاريخ التقرير: ${reverse(new Date().toISOString().slice(0, 10))}`, left, 74, width, { size: 9, color: '#667085' }); doc.moveTo(left, 96).lineTo(left + width, 96).lineWidth(3).strokeColor('#F7941D').stroke(); };
+    const tableHeader = (y) => { const labels = ['كود المنتج', 'البيان', 'الكمية الحالية', 'قيمة المخزون']; let x = left; labels.forEach((label, index) => { doc.rect(x, y, columns[index], 30).fillAndStroke('#FFD966', '#D9A900'); rtl(label, x + 4, y + 9, columns[index] - 8, { bold: true, size: 8 }); x += columns[index]; }); return y + 30; };
+    header(); let y = tableHeader(112);
+    const drawRow = (values, total = false) => { const height = Math.max(31, doc.heightOfString(String(values[1]), { width: columns[1] - 10, align: 'right' }) + 16); if (y + height > 746) { doc.addPage(); header(true); y = tableHeader(112); } let x = left; values.forEach((value, index) => { doc.rect(x, y, columns[index], height).fillAndStroke(total ? '#FFF4CC' : '#FFFFFF', '#E5E7EB'); rtl(value, x + 5, y + 8, columns[index] - 10, { bold: total, size: index === 1 ? 8 : 8 }); x += columns[index]; }); y += height; };
+    if (rows.length) rows.forEach((item) => drawRow([item.code, item.statement, item.quantity, money(item.value)]));
+    else drawRow(['—', 'لا توجد أصناف في المخزن', '0', '0.00']);
+    y += 12;
+    const totalValue = rows.reduce((sum, item) => sum + item.value, 0);
+    doc.roundedRect(left, y, width, 50, 8).fillAndStroke('#F8FAFC', '#DDE3EC');
+    rtl(`إجمالي الأصناف المختلفة: ${reverse(rows.length)}`, left + width / 2, y + 10, width / 2 - 12, { bold: true, size: 10 });
+    rtl(`إجمالي قيمة البضاعة: ${reverse(money(totalValue))} ج`, left + 12, y + 28, width - 24, { bold: true, size: 11, color: '#17243C' });
+    rtl('المركز الفرنسي - تقرير جرد داخلي', left, Math.max(y + 68, 780), width, { bold: true, size: 8, color: '#667085' });
+    doc.end();
   } catch (error) { reject(error); } });
 }
 
@@ -756,6 +813,19 @@ async function api(request, response, pathname, searchParams) {
     }
     const buffer = await supplierDebtsWorkbook(data);
     response.writeHead(200, { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Content-Disposition': 'attachment; filename="supplier-debts.xlsx"', 'Content-Length': buffer.length, 'Cache-Control': 'no-store' });
+    return response.end(buffer);
+  }
+
+  if (request.method === 'GET' && pathname === '/api/inventory-audit') {
+    const format = clean(searchParams?.get('format')) || 'xlsx';
+    const data = readData();
+    if (format === 'pdf') {
+      const buffer = await inventoryAuditPdf(data);
+      response.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="inventory-audit.pdf"', 'Content-Length': buffer.length, 'Cache-Control': 'no-store' });
+      return response.end(buffer);
+    }
+    const buffer = await inventoryAuditWorkbook(data);
+    response.writeHead(200, { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Content-Disposition': 'attachment; filename="inventory-audit.xlsx"', 'Content-Length': buffer.length, 'Cache-Control': 'no-store' });
     return response.end(buffer);
   }
 
