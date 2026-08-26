@@ -1105,6 +1105,7 @@ async function api(request, response, pathname, searchParams) {
     const supplier = data.suppliers.find((item) => item.code === supplierKey || item.name === supplierKey) || null;
     const employee = data.employees.find((item) => item.code === employeeKey || item.name === employeeKey) || null;
     const employeeMovement = ['مرتبات', 'سلفة موظف', 'سداد سلفة موظف', 'مستحق لموظف', 'دفع مستحق موظف'].includes(type);
+    if (['سداد مديونية', 'سداد مستحقات', 'سداد سلفة موظف', 'دفع مستحق موظف', 'توريد بضاعة'].includes(type) && payment.payments.some((entry) => entry.method === 'آجل')) return json(response, 400, { error: 'هذه الحركة لا تقبل طريقة دفع آجل.' });
     if (type === 'سداد مديونية' && !customer) return json(response, 400, { error: 'اختر العميل قبل سداد مديونيته.' });
     if (type === 'سداد مديونية' && amount > customer.dueFromCustomer) return json(response, 400, { error: `المبلغ أكبر من مديونية العميل (${customer.dueFromCustomer}).` });
     if (employeeMovement && !employee) return json(response, 400, { error: 'اختر الموظف المرتبط بالحركة.' });
