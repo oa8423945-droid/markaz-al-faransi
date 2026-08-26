@@ -962,6 +962,7 @@ async function api(request, response, pathname, searchParams) {
     const visitTotal = partsTotal + labor;
     const payment = paymentInfo(input, visitTotal);
     const { paymentMethod, paymentDetails, paid } = payment;
+    if (Math.abs(payment.allocated - visitTotal) > 0.001) return json(response, 400, { error: `وزّع إجمالي الفاتورة كاملًا على طرق الدفع (${visitTotal}).` });
     if (payment.allocated > visitTotal) return json(response, 400, { error: 'مجموع طرق الدفع أكبر من إجمالي الزيارة.' });
     if (paid > visitTotal) return json(response, 400, { error: 'المبلغ المدفوع أكبر من إجمالي الزيارة.' });
     const visit = {
