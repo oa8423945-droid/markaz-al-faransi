@@ -1,5 +1,5 @@
-Warning: truncated output (original token count: 31005)
-Total output lines: 1338
+Warning: truncated output (original token count: 31263)
+Total output lines: 1348
 
 const state = { customers: [], visits: [], inventory: [], suppliers: [], employees: [], expenses: [], movements: [], accounts: [], selectedCustomer: null, movementMode: '', selectedProduct: null, productMovementMode: '', selectedSupplierName: '' };
 const $ = (selector) => document.querySelector(selector);
@@ -20,7 +20,7 @@ function installSplitPayment(form, paidFieldName = '', allowCredit = true) {
   const editor = document.createElement('div');
   editor.className = 'split-payment-editor wide';
   editor.dataset.allowCredit = allowCredit ? '1' : '0';
-  editor.innerHTML = `<div class="split-payment-head"><div><b>طرق الدفع</b><small>اكتب مبلغ كل طريقة، ويمكن إضافة أكثر من طريقة.</small></div><button type="button" class="secondary add-split-payment">＋ إضافة طريقة دفع</button></div><div class="split-payment-rows">${paymentRow(allowCredit)}</div>`;
+  editor.innerHTML = `<div class="split-payment-head"><div><b>طرق الدفع</b><small>اكتب مبلغ كل طريقة، ويمكن إضافة أكثر من طريقة.</small></div><button type="button" class="secondary add-split-payment">＋ إضافة طريقة دفع</button></div>${form.id === 'visitForm' ? '<div class="visit-payment-total">إجمالي الفاتورة المطلوب توزيعه: <strong id="visitPaymentTotal">0 ج</strong></div>' : ''}<div class="split-payment-rows">${paymentRow(allowCredit)}</div>`;
   methodLabel.before(editor);
   const addRow = () => { editor.querySelector('.split-payment-rows').insertAdjacentHTML('beforeend', paymentRow(allowCredit)); bindSplitPaymentRows(editor); };
   editor.querySelector('.add-split-payment').addEventListener('click', addRow);
@@ -33,6 +33,7 @@ function bindSplitPaymentRows(editor) {
     if (form.elements.paid) form.elements.paid.value = paid;
     if (form.id === 'inventoryForm') calculateInventoryPurchase();
     if (form.id === 'supplierTransactionForm') calculateSupplierTransaction();
+    if (form.id === 'visitForm') updateVisitPaymentTotal();
   };
   editor.querySelectorAll('.remove-split-payment').forEach((button) => { button.onclick = () => { if (editor.querySelectorAll('.split-payment-row').length > 1) { button.closest('.split-payment-row').remove(); sync(); } }; });
   editor.querySelectorAll('.split-payment-method,.split-payment-amount').forEach((input) => { input.oninput = sync; input.onchange = sync; });
@@ -254,6 +255,8 @@ function upgradeSearchableChoices() {
   installSplitPayment($('#inventoryForm'), 'paid', false);
   installSplitPayment($('#supplierTransactionForm'), 'paid', false);
   installSplitPayment($('#manualAccountForm'));
+  const laborInput = $('#visitForm [name="labor"]');
+  if (laborInput && !laborInput.dataset.totalBound) { laborInput.dataset.totalBound = '1'; laborInput.addEventListener('input', updateVisitPaymentTotal); }
 }
 
 function openInventoryDialog() {
@@ -579,7 +582,14 @@ function calculateVisitParts() {
     }
   });
   $('#visitPartsTotal').textContent = `${fmt(total)} ج`;
+  updateVisitPaymentTotal();
   return total;
+}
+
+function updateVisitPaymentTotal() {
+  const form = $('#visitForm'); const target = $('#visitPaymentTotal'); if (!form || !target) return;
+  const parts = [...document.querySelectorAll('#visitPartsRows .part-entry')].reduce((sum, row) => { const item = state.inventory.find((entry) => entry.code === row.querySelector('.part-select').value); return sum + (item ? item.sell * Math.max(1, Math.floor(Number(row.querySelector('.part-qty').value) || 1)) : 0); }, 0);
+  target.textContent = `${fmt(parts + (Number(form.elements.labor?.value) || 0))} ج`;
 }
 
 function installInventoryMovementUI() {
@@ -783,13 +793,7 @@ function installEmployeesUI() {
   page.innerHTML = `<div class="page-title"><div><span class="eyebrow">فريق العمل</span><h1>الموظفين</h1><p>بيانات الموظفين ورواتبهم وأرصدتهم المالية.</p></div><div class="employee-page-actions"><button id="addEmployeeButton" class="primary" type="button">＋ إضافة موظف</button><button id="stoppedEmployeesButton" class="secondary" type="button">الموقوفين عن العمل</button></div></div><div id="activeEmployeesView" class="panel"><div class="panel-head"><div><h2>الموظفين العاملين</h2><p id="employeesCount"></p></div></div><div id="employeesTable"></div></div><div id="stoppedEmployeesView" class="panel hidden"><div class="panel-head"><div><h2>الموقوفين عن العمل</h2><p id="stoppedEmployeesCount"></p></div><button id="activeEmployeesBack" class="back-btn" type="button">→ رجوع للعاملين</button></div><div id="stoppedEmployeesTable"></div></div>`;
   $('main').appendChild(page);
   const addDialog = document.createElement('dialog'); addDialog.id = 'employeeAddDialog';
-  addDialog.innerHTML = `<form id="employeeAddForm"><button type="button" class="dialog-close">×</button><div class="dialog-title"><span>♟</span><div><h2>إضافة موظف</h2><p>سيتم إنشاء كود E تلقائيًا.</p></div></div><div class="form-grid"><label>الاسم<input name="name" required></label><label>رقم التليفون<input name="phone" required></label><label>تاريخ التوظيف<input name="hireDate" type="date" required></label><label>التخصص<input name="specialty" required placeholder="مثال: ميكانيكا أو كهرباء"></label><label>المرتب الأسبوعي<input name="weeklySalary" type="number" min="0" step="0.01" required></label><label class="wide">ملاحظات<textarea name="notes" rows="2"></textarea></label></div><div class="form-actions"><button class="primary" type="submit">حفظ الموظف</button></div></form>`;
-  document.body.appendChild(addDialog); addDialog.querySelector('.dialog-close').addEventListener('click', () => addDialog.close());
-  const details = document.createElement('dialog'); details.id = 'employeeDetailsDialog';
-  details.innerHTML = '<div class="employee-details-dialog"><button type="button" class="dialog-close">×</button><div id="employeeDetailsContent"></div></div>';
-  document.body.appendChild(details); details.querySelector('.dialog-close').addEventListener('click', () => details.close());
-  const statusDialog = document.createElement('dialog'); statusDialog.id = 'employeeStatusDialog';
-  statusDialog.innerHTML = `<form id="employeeStatusForm"><button type="button" class="dialog-close">×</button><input type="hidden" name="employeeCode"><div class="dialog-title"><span>!</span><div><h2>تغيير حالة الموظف</h2><p id="employeeStatusName"></p></div></div><div class="form-grid"><label>الحالة<…1005 tokens truncated…) {
+  addDialog.innerHTML = `<form id="employeeAddForm"><button type="button" class="dialog-close">×</button><div class="dialog-title"><span>♟</span><div><h2>إضافة موظف</h2><p>سيتم إنشاء كود E تلقائيًا.</p></div></div><div class="form-grid"><label>الاسم<input name="name" required></label><label>رقم التليفون<input name="phone" required></label><label>تاريخ التوظيف<input name="hireDate" type="date" required></label><label>التخصص<input name="specialty" required placeholder="مثال: ميكانيكا أو كهرباء"></label><label>المرتب الأسبوعي<input name="weeklySalary" type="number" min="0" step="0.01" required></label><label class="wide">ملاحظات<textarea name="notes" rows="2"></textarea></label></div><div class="for…1263 tokens truncated…) {
   const employee = state.employees.find((item) => item.code === code); if (!employee) return;
   const accounts = state.accounts.filter((account) => account.employeeCode === employee.code);
   const rows = [...accounts].reverse().map((account) => `<tr class="account-row" data-account-code="${esc(account.code)}"><td>${esc(account.executionDate || account.date)}</td><td>${esc(account.type)}</td><td>${esc(account.description)}</td><td>${fmt(account.total)} ج</td><td>${esc(account.direction)}</td></tr>`).join('');
