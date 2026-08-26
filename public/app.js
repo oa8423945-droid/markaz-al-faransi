@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 30234)
+Total output lines: 1308
+
 const state = { customers: [], visits: [], inventory: [], suppliers: [], employees: [], expenses: [], movements: [], accounts: [], selectedCustomer: null, movementMode: '', selectedProduct: null, productMovementMode: '', selectedSupplierName: '' };
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -785,17 +788,7 @@ function installEmployeesUI() {
   details.innerHTML = '<div class="employee-details-dialog"><button type="button" class="dialog-close">×</button><div id="employeeDetailsContent"></div></div>';
   document.body.appendChild(details); details.querySelector('.dialog-close').addEventListener('click', () => details.close());
   const statusDialog = document.createElement('dialog'); statusDialog.id = 'employeeStatusDialog';
-  statusDialog.innerHTML = `<form id="employeeStatusForm"><button type="button" class="dialog-close">×</button><input type="hidden" name="employeeCode"><div class="dialog-title"><span>!</span><div><h2>تغيير حالة الموظف</h2><p id="employeeStatusName"></p></div></div><div class="form-grid"><label>الحالة<select name="status" required><option value="موقوف مؤقتًا">موقوف مؤقتًا</option><option value="منتهي الخدمة">منتهي الخدمة</option></select></label><label>تاريخ الإيقاف<input name="stopDate" type="date" required></label><label class="wide">سبب الإيقاف أو إنهاء الخدمة<textarea name="reason" rows="3" required></textarea></label></div><div class="form-actions"><button class="danger-button" type="submit">حفظ ونقل للموقوفين</button></div></form>`;
-  document.body.appendChild(statusDialog); statusDialog.querySelector('.dialog-close').addEventListener('click', () => statusDialog.close());
-  $('#addEmployeeButton').addEventListener('click', () => { $('#employeeAddForm').reset(); $('#employeeAddForm').elements.hireDate.value = new Date().toISOString().slice(0,10); addDialog.showModal(); });
-  $('#employeeAddForm').addEventListener('submit', submitEmployee);
-  $('#employeeStatusForm').addEventListener('submit', submitEmployeeStatus);
-  $('#stoppedEmployeesButton').addEventListener('click', showStoppedEmployees);
-  $('#activeEmployeesBack').addEventListener('click', showActiveEmployees);
-}
-
-function renderEmployees() {
-  const active = state.employees.filter((employee) => !employee.status || employee.status === 'يعمل');
+  statusDialog.innerHTML = `<form id="employeeStatusForm"><button type="button" class="dialog-close">×</button><input type="hidden" name="employeeCode"><div class="dialog-title"><span>!</span><div><h2>تغيير حالة الموظف</h2><p id="employeeStatusName"></p></div></div><div class="form-grid"><label>الحالة<select name="status" required><option value="موقوف مؤقتًا">موقوف مؤقتًا</option><option value="منتهي الخدمة">منتهي الخدمة</option></select></label><label>تاريخ الإيقاف<input name="stopDate" type="date" required></label><label class="wide">سبب الإيقاف أو إنهاء الخ…234 tokens truncated…mployee.status || employee.status === 'يعمل');
   $('#employeesCount').textContent = `${fmt(active.length)} موظف يعمل`;
   if (!active.length) { $('#employeesTable').innerHTML = '<div class="empty-state">لا يوجد موظفون عاملون حاليًا.</div>'; return; }
   const rows = active.map(employeeTableRow).join('');
@@ -1021,7 +1014,7 @@ function renderFinancialSummaries() {
     ${section('المصروفات الإضافية', ['البيان','المبلغ','طريقة الدفع','الملاحظات'], additionalExpenses.map((a) => `<tr><td>${esc(a.description || '—')}</td><td>${fmt(a.paid)} ج</td><td>${esc(a.paymentMethod || '—')}</td><td>${esc(a.notes || '—')}</td></tr>`))}
     ${section('قطع الغيار المستخدمة في الزيارات', ['العميل','كود الزيارة','القطع والكميات','قيمة القطع'], visitsWithParts.map((visit) => { const customer = state.customers.find((item) => item.code === visit.customerCode) || {}; return `<tr><td>${esc(customer.name || '—')}<br><small>${esc(visit.customerCode)}</small></td><td>${esc(visit.code)}</td><td>${esc(visit.partsCodes)}</td><td>${fmt(visit.partsTotal)} ج</td></tr>`; }))}
     ${section('دفعات الموردين', ['المورد','المبلغ','طريقة الدفع'], supplierPayments.map((a) => `<tr><td>${esc(a.supplierName)}<br><small>${esc(a.supplierCode)}</small></td><td>${fmt(a.paid)} ج</td><td>${esc(a.paymentMethod || '—')}</td></tr>`))}
-    ${section('المبيعات', ['العميل','كود الزيارة','نوع العربية','المصنعية','المدفوع','طريقة الدفع'], sales.map((a) => { const visit = state.visits.find((v) => v.code === a.visitCode) || {}; const customer = state.customers.find((c) => c.code === a.customerCode) || {}; return `<tr><td>${esc(a.customerName || customer.name || '—')}<br><small>${esc(a.customerCode)}</small></td><td>${esc(a.visitCode)}</td><td>${esc(customer.carType || '—')}</td><td>${fmt(visit.labor)} ج</td><td>${fmt(a.paid)} ج</td><td>${esc(a.paymentMethod || '—')}</td></tr>`; }))}`;
+    ${section('المبيعات', ['العميل','كود الزيارة','نوع العربية','المصنعية','إجمالي الفاتورة','المدفوع','طريقة الدفع'], sales.map((a) => { const visit = state.visits.find((v) => v.code === a.visitCode) || {}; const customer = state.customers.find((c) => c.code === a.customerCode) || {}; return `<tr><td>${esc(a.customerName || customer.name || '—')}<br><small>${esc(a.customerCode)}</small></td><td>${esc(a.visitCode)}</td><td>${esc(customer.carType || '—')}</td><td>${fmt(visit.labor)} ج</td><td class="money-value">${fmt(visit.total || a.total)} ج</td><td>${fmt(a.paid)} ج</td><td>${esc(a.paymentMethod || '—')}</td></tr>`; }))}`;
   const statementRange = financialDateRange(statementPeriod, date);
   const statementAccounts = state.accounts.filter((account) => { const movementDate = account.executionDate || account.date; return movementDate >= statementRange.from && movementDate <= statementRange.to; });
   const statementRows = statementAccounts.map((account) => `<tr class="account-row" data-account-code="${esc(account.code)}"><td>${esc(account.executionDate || account.date)}</td><td>${esc(account.time || '—')}</td><td>${esc(account.description || '—')}</td><td>${esc(account.type)}</td><td><b>${esc(account.code)}</b></td><td>${esc(account.notes || '—')}</td><td>${account.direction === 'صادر' ? `${fmt(account.paid)} ج` : '—'}</td><td>${account.direction === 'وارد' ? `${fmt(account.paid)} ج` : '—'}</td><td><b>${fmt(account.balance)} ج</b></td></tr>`).join('');
