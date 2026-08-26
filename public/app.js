@@ -1,5 +1,5 @@
-Warning: truncated output (original token count: 31965)
-Total output lines: 1370
+Warning: truncated output (original token count: 31886)
+Total output lines: 1367
 
 const state = { customers: [], visits: [], inventory: [], suppliers: [], employees: [], expenses: [], movements: [], accounts: [], selectedCustomer: null, movementMode: '', selectedProduct: null, productMovementMode: '', selectedSupplierName: '' };
 const $ = (selector) => document.querySelector(selector);
@@ -794,7 +794,10 @@ function installEmployeesUI() {
   page.innerHTML = `<div class="page-title"><div><span class="eyebrow">فريق العمل</span><h1>الموظفين</h1><p>بيانات الموظفين ورواتبهم وأرصدتهم المالية.</p></div><div class="employee-page-actions"><button id="addEmployeeButton" class="primary" type="button">＋ إضافة موظف</button><button id="stoppedEmployeesButton" class="secondary" type="button">الموقوفين عن العمل</button></div></div><div id="activeEmployeesView" class="panel"><div class="panel-head"><div><h2>الموظفين العاملين</h2><p id="employeesCount"></p></div></div><div id="employeesTable"></div></div><div id="stoppedEmployeesView" class="panel hidden"><div class="panel-head"><div><h2>الموقوفين عن العمل</h2><p id="stoppedEmployeesCount"></p></div><button id="activeEmployeesBack" class="back-btn" type="button">→ رجوع للعاملين</button></div><div id="stoppedEmployeesTable"></div></div>`;
   $('main').appendChild(page);
   const addDialog = document.createElement('dialog'); addDialog.id = 'employeeAddDialog';
-  addDialog.innerHTML = `<form id="employeeAddForm"><button type="button" class="dialog-close">×</button><div class="dialog-title"><span>♟</span><div><h2>إضافة موظف</h2><p>سيتم إنشاء كود E تلقائيًا.</p></div></div><div class="form-grid"><label>الاسم<input name="name" required></label><label>رقم التليفون<input name="phone" required></label><label>تاريخ التوظيف<input name="hireDate" type="date" required></label><label>التخصص<input name="specialty" required placeholder="مثال: ميكانيكا أو كهرباء"></label><label>المرتب الأسبوعي<input name="weeklySalary" type="n…1965 tokens truncated…ck', () => { $('#employeeDetailsDialog').close(); showAccountDetails(row.dataset.accountCode); }));
+  addDialog.innerHTML = `<form id="employeeAddForm"><button type="button" class="dialog-close">×</button><div class="dialog-title"><span>♟</span><div><h2>إضافة موظف</h2><p>سيتم إنشاء كود E تلقائيًا.</p></div></div><div class="form-grid"><label>الاسم<input name="name" required></label><label>رقم التليفون<input name="phone" required></label><label>تاريخ التوظيف<input name="hireDate" type="date" required></label><label>التخصص<input name="specialty" required placeholder="مثال: ميكانيكا أو كهرباء"></label><label>المرتب الأسبوعي<input name="weeklySalary" type="n…1886 tokens truncated…لية للموظف.</div>'}`;
+  $('#stopEmployeeButton')?.addEventListener('click', () => openEmployeeStatusDialog(employee));
+  $('#reactivateEmployeeButton')?.addEventListener('click', () => reactivateEmployee(employee.code));
+  $$('#employeeDetailsContent .account-row').forEach((row) => row.addEventListener('click', () => { $('#employeeDetailsDialog').close(); showAccountDetails(row.dataset.accountCode); }));
   $('#employeeDetailsDialog').showModal();
 }
 
@@ -1057,7 +1060,6 @@ function updateManualDebtFields() {
   $('#debtSideField').classList.toggle('hidden', !isDebt);
   form.querySelector('.split-payment-editor').classList.toggle('hidden', isDebt);
   form.elements.customerCode.required = isDebt;
-  if (isDebt) form.elements.type.value = 'سلفة موظف';
   updateManualOperationChoices();
   updateManualEmployeeFields();
   updateManualDebtHint();
@@ -1067,7 +1069,7 @@ function updateManualOperationChoices() {
   const form = $('#manualAccountForm'); if (!form) return;
   const operation = form.elements.operation.value;
   const choices = operation === 'سحب' ? ['مصروفات تشغيل', 'مشتريات نقدية', 'مصروفات إضافية', 'مرتبات', 'إذن صرف'] : operation === 'إيداع' ? ['إيراد نقدي'] : operation === 'دين' ? ['سلفة موظف'] : operation === 'دفع مستحقات' ? ['سداد سلفة موظف', 'سداد مديونية عميل', 'سداد مستحقات للمورد'] : [];
-  const list = $('#accountTypeOptions'); if (list && choices.length) { list.innerHTML = choices.map((value) => `<option value="${value}">`).join(''); form.elements.type.value = choices[0]; }
+  const list = $('#accountTypeOptions'); if (list && choices.length) { list.innerHTML = choices.map((value) => `<option value="${value}">`).join(''); if (!choices.includes(form.elements.type.value)) form.elements.type.value = ''; }
   const type = form.elements.type.value;
   const employee = operation === 'دين' || ['سداد سلفة موظف'].includes(type);
   const customer = operation === 'دفع مستحقات' && type === 'سداد مديونية عميل';
@@ -1117,8 +1119,6 @@ function updateManualEmployeeFields() {
   if (!employeeMovement) { form.elements.employeeCode.value = ''; return; }
   form.elements.customerCode.value = '';
   form.elements.supplierCode.value = '';
-  if (type === 'مرتبات' || type === 'سلفة' || type === 'سلفة موظف' || type === 'دفع مستحق موظف') form.elements.operation.value = 'سحب';
-  if (type === 'سداد سلفة موظف' || type === 'مستحق لموظف') form.elements.operation.value = 'إيداع';
   $('#debtSideField').classList.add('hidden');
   form.querySelector('.split-payment-editor').classList.toggle('hidden', type === 'مستحق لموظف');
   updateManualDebtHint();
