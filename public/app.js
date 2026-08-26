@@ -1,5 +1,5 @@
-Warning: truncated output (original token count: 31263)
-Total output lines: 1348
+Warning: truncated output (original token count: 31957)
+Total output lines: 1369
 
 const state = { customers: [], visits: [], inventory: [], suppliers: [], employees: [], expenses: [], movements: [], accounts: [], selectedCustomer: null, movementMode: '', selectedProduct: null, productMovementMode: '', selectedSupplierName: '' };
 const $ = (selector) => document.querySelector(selector);
@@ -343,6 +343,7 @@ function installProductDetailsUI() {
   dialog.id = 'productDetailsDialog';
   dialog.innerHTML = '<div class="product-details-dialog"><button type="button" class="dialog-close product-dialog-close" aria-label="إغلاق تفاصيل المنتج">×</button><div id="productDetailsContent"></div></div>';
   document.body.appendChild(dialog);
+  $('#manualAccountForm').elements.operation.insertAdjacentHTML('beforeend', '<option value="دفع مستحقات">دفع مستحقات</option>');
   dialog.querySelector('.dialog-close').addEventListener('click', () => dialog.close());
   const movementDialog = document.createElement('dialog');
   movementDialog.id = 'singleMovementDialog';
@@ -793,15 +794,7 @@ function installEmployeesUI() {
   page.innerHTML = `<div class="page-title"><div><span class="eyebrow">فريق العمل</span><h1>الموظفين</h1><p>بيانات الموظفين ورواتبهم وأرصدتهم المالية.</p></div><div class="employee-page-actions"><button id="addEmployeeButton" class="primary" type="button">＋ إضافة موظف</button><button id="stoppedEmployeesButton" class="secondary" type="button">الموقوفين عن العمل</button></div></div><div id="activeEmployeesView" class="panel"><div class="panel-head"><div><h2>الموظفين العاملين</h2><p id="employeesCount"></p></div></div><div id="employeesTable"></div></div><div id="stoppedEmployeesView" class="panel hidden"><div class="panel-head"><div><h2>الموقوفين عن العمل</h2><p id="stoppedEmployeesCount"></p></div><button id="activeEmployeesBack" class="back-btn" type="button">→ رجوع للعاملين</button></div><div id="stoppedEmployeesTable"></div></div>`;
   $('main').appendChild(page);
   const addDialog = document.createElement('dialog'); addDialog.id = 'employeeAddDialog';
-  addDialog.innerHTML = `<form id="employeeAddForm"><button type="button" class="dialog-close">×</button><div class="dialog-title"><span>♟</span><div><h2>إضافة موظف</h2><p>سيتم إنشاء كود E تلقائيًا.</p></div></div><div class="form-grid"><label>الاسم<input name="name" required></label><label>رقم التليفون<input name="phone" required></label><label>تاريخ التوظيف<input name="hireDate" type="date" required></label><label>التخصص<input name="specialty" required placeholder="مثال: ميكانيكا أو كهرباء"></label><label>المرتب الأسبوعي<input name="weeklySalary" type="number" min="0" step="0.01" required></label><label class="wide">ملاحظات<textarea name="notes" rows="2"></textarea></label></div><div class="for…1263 tokens truncated…) {
-  const employee = state.employees.find((item) => item.code === code); if (!employee) return;
-  const accounts = state.accounts.filter((account) => account.employeeCode === employee.code);
-  const rows = [...accounts].reverse().map((account) => `<tr class="account-row" data-account-code="${esc(account.code)}"><td>${esc(account.executionDate || account.date)}</td><td>${esc(account.type)}</td><td>${esc(account.description)}</td><td>${fmt(account.total)} ج</td><td>${esc(account.direction)}</td></tr>`).join('');
-  const isActive = !employee.status || employee.status === 'يعمل';
-  $('#employeeDetailsContent').innerHTML = `<div class="dialog-title"><span>♟</span><div><h2>${esc(employee.name)}</h2><p>${esc(employee.code)} · ${esc(employee.specialty)}</p></div></div><div class="employee-status-actions">${isActive ? '<button id="stopEmployeeButton" class="danger-button" type="button">إيقاف أو إنهاء الخدمة</button>' : '<button id="reactivateEmployeeButton" class="primary" type="button">إعادة الموظف للعمل</button>'}</div><div class="employee-summary-grid"><div><small>رقم التليفون</small><b>${esc(employee.phone)}</b></div><div><small>تاريخ التوظيف</small><b>${esc(employee.hireDate)}</b></div><div><small>الحالة</small><b>${esc(employee.status || 'يعمل')}</b></div><div><small>عدد المشاركات</small><b>${fmt(employee.contributions)}</b></div><div><small>المرتب الأسبوعي</small><b>${fmt(employee.weeklySalary)} ج</b></div><div class="employee-debt"><small>مبالغ عليه</small><b>${fmt(employee.debtOnEmployee)} ج</b></div><div class="employee-credit"><small>مبالغ له</small><b>${fmt(employee.dueToEmployee)} ج</b></div>${!isActive ? `<div><small>تاريخ الإيقاف</small><b>${esc(employee.stopDate || '—')}</b></div><div><small>سبب الإيقاف</small><b>${esc(employee.stopReason || '—')}</b></div>` : ''}</div><div class="supplier-movements-title"><h3>الحركات المالية</h3><p>${fmt(accounts.length)} حركة</p></div>${rows ? `<div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>النوع</th><th>البيان</th><th>المبلغ</th><th>الاتجاه</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="empty-state">لا توجد حركات مالية للموظف.</div>'}`;
-  $('#stopEmployeeButton')?.addEventListener('click', () => openEmployeeStatusDialog(employee));
-  $('#reactivateEmployeeButton')?.addEventListener('click', () => reactivateEmployee(employee.code));
-  $$('#employeeDetailsContent .account-row').forEach((row) => row.addEventListener('click', () => { $('#employeeDetailsDialog').close(); showAccountDetails(row.dataset.accountCode); }));
+  addDialog.innerHTML = `<form id="employeeAddForm"><button type="button" class="dialog-close">×</button><div class="dialog-title"><span>♟</span><div><h2>إضافة موظف</h2><p>سيتم إنشاء كود E تلقائيًا.</p></div></div><div class="form-grid"><label>الاسم<input name="name" required></label><label>رقم التليفون<input name="phone" required></label><label>تاريخ التوظيف<input name="hireDate" type="date" required></label><label>التخصص<input name="specialty" required placeholder="مثال: ميكانيكا أو كهرباء"></label><label>المرتب الأسبوعي<input name="weeklySalary" type="n…1957 tokens truncated…(row) => row.addEventListener('click', () => { $('#employeeDetailsDialog').close(); showAccountDetails(row.dataset.accountCode); }));
   $('#employeeDetailsDialog').showModal();
 }
 
@@ -849,7 +842,7 @@ function installAccountsUI() {
   document.body.appendChild(dialog);
   const manualGrid = $('#manualAccountForm .form-grid');
   manualGrid.querySelector('.wide').insertAdjacentHTML('beforebegin', `<label class="wide">البيان<input name="description" required placeholder="اكتب المشتريات أو سبب المصروف بالتفصيل"></label><label id="manualCustomerField">العميل (اختياري)<input name="customerCode" list="manualCustomerOptions" placeholder="كود أو اسم العميل"><datalist id="manualCustomerOptions"></datalist></label><label id="manualSupplierField">المورد (اختياري)<input name="supplierCode" list="manualSupplierOptions" placeholder="كود أو اسم المورد"><datalist id="manualSupplierOptions"></datalist></label><label id="manualEmployeeField" class="hidden">الموظف<input name="employeeCode" list="manualEmployeeOptions" placeholder="كود أو اسم الموظف"><datalist id="manualEmployeeOptions"></datalist></label><div id="manualDebtHint" class="debt-inline-hint wide hidden"></div><label>طريقة الدفع<select name="paymentMethod" required>${paymentMethodOptions()}</select></label>`);
-  $('#accountTypeOptions').insertAdjacentHTML('beforeend', '<option value="سلفة موظف"><option value="سداد سلفة موظف"><option value="مستحق لموظف"><option value="دفع مستحق موظف">');
+  $('#accountTypeOptions').insertAdjacentHTML('beforeend', '<option value="سلفة موظف"><option value="سداد سلفة موظف"><option value="سداد مديونية عميل"><option value="سداد مستحقات للمورد"><option value="دفع مستحق موظف"><option value="مصروفات نقدية">');
   dialog.querySelector('.dialog-close').addEventListener('click', () => dialog.close());
   $('#addManualAccountButton').addEventListener('click', openManualAccount);
   $('#financialSummariesButton').addEventListener('click', openFinancialSummaries);
@@ -1064,8 +1057,25 @@ function updateManualDebtFields() {
   $('#debtSideField').classList.toggle('hidden', !isDebt);
   form.querySelector('.split-payment-editor').classList.toggle('hidden', isDebt);
   form.elements.customerCode.required = isDebt;
-  if (isDebt && !form.elements.type.value) form.elements.type.value = 'سلفة';
+  if (isDebt) form.elements.type.value = 'سلفة موظف';
+  updateManualOperationChoices();
   updateManualDebtHint();
+}
+
+function updateManualOperationChoices() {
+  const form = $('#manualAccountForm'); if (!form) return;
+  const operation = form.elements.operation.value;
+  const choices = operation === 'سحب' ? ['مصروفات تشغيل', 'مشتريات نقدية', 'مصروفات نقدية', 'مرتبات'] : operation === 'إيداع' ? ['إذن صرف', 'إيراد نقدي'] : operation === 'دين' ? ['سلفة موظف'] : operation === 'دفع مستحقات' ? ['سداد سلفة موظف', 'سداد مديونية عميل', 'سداد مستحقات للمورد'] : [];
+  const list = $('#accountTypeOptions'); if (list && choices.length) { list.innerHTML = choices.map((value) => `<option value="${value}">`).join(''); form.elements.type.value = choices[0]; }
+  const type = form.elements.type.value;
+  const employee = operation === 'دين' || ['سداد سلفة موظف'].includes(type);
+  const customer = operation === 'دفع مستحقات' && type === 'سداد مديونية عميل';
+  const supplier = operation === 'دفع مستحقات' && type === 'سداد مستحقات للمورد';
+  $('#manualEmployeeField').classList.toggle('hidden', !employee); $('#manualCustomerField').classList.toggle('hidden', !(customer || (!employee && operation !== 'دفع مستحقات'))); $('#manualSupplierField').classList.toggle('hidden', !(supplier || (!employee && operation !== 'دفع مستحقات')));
+  form.elements.employeeCode.required = employee; form.elements.customerCode.required = customer || operation === 'دين'; form.elements.supplierCode.required = supplier;
+  if (employee) { form.elements.customerCode.value = ''; form.elements.supplierCode.value = ''; }
+  if (customer) { form.elements.employeeCode.value = ''; form.elements.supplierCode.value = ''; }
+  if (supplier) { form.elements.employeeCode.value = ''; form.elements.customerCode.value = ''; }
 }
 
 function updateManualDebtHint() {
@@ -1076,15 +1086,15 @@ function updateManualDebtHint() {
   const employee = state.employees.find((item) => normalized(item.code) === employeeKey || normalized(item.name) === employeeKey);
   let label = '';
   if (employee && ['سداد سلفة موظف', 'دفع مستحق موظف'].includes(type)) label = type === 'سداد سلفة موظف' ? `المتبقي على الموظف: ${fmt(employee.debtOnEmployee)} ج` : `المستحق للموظف: ${fmt(employee.dueToEmployee)} ج`;
-  else if (customer && (type === 'سداد مديونية' || form.elements.operation.value === 'دين')) label = `المستحق على العميل: ${fmt(customer.dueFromCustomer)} ج · المستحق على المركز: ${fmt(customer.dueFromCenter)} ج`;
-  else if (supplier && type === 'سداد مستحقات') label = `المستحق للمورد: ${fmt(supplier.due)} ج`;
+  else if (customer && (type === 'سداد مديونية' || type === 'سداد مديونية عميل' || form.elements.operation.value === 'دين')) label = `المستحق على العميل: ${fmt(customer.dueFromCustomer)} ج · المستحق على المركز: ${fmt(customer.dueFromCenter)} ج`;
+  else if (supplier && (type === 'سداد مستحقات' || type === 'سداد مستحقات للمورد')) label = `المستحق للمورد: ${fmt(supplier.due)} ج`;
   hint.textContent = label; hint.classList.toggle('hidden', !label);
   updateManualPaymentOptions();
 }
 
 function updateManualPaymentOptions() {
   const form = $('#manualAccountForm'); if (!form) return;
-  const blocked = ['سداد مديونية', 'سداد مستحقات', 'سداد سلفة موظف', 'دفع مستحق موظف', 'توريد بضاعة'].includes(form.elements.type.value);
+  const blocked = ['سداد مديونية', 'سداد مديونية عميل', 'سداد مستحقات', 'سداد مستحقات للمورد', 'سداد سلفة موظف', 'دفع مستحق موظف', 'توريد بضاعة'].includes(form.elements.type.value);
   form.querySelectorAll('.split-payment-method option, select[name="paymentMethod"] option').forEach((option) => {
     if (option.value === 'آجل') { option.hidden = blocked; option.disabled = blocked; }
   });
@@ -1095,10 +1105,13 @@ function updateManualPaymentOptions() {
 function updateManualEmployeeFields() {
   const form = $('#manualAccountForm');
   const type = form.elements.type.value;
-  const employeeMovement = ['مرتبات', 'سلفة', 'سلفة موظف', 'سداد سلفة موظف', 'مستحق لموظف', 'دفع مستحق موظف'].includes(type);
+  const operation = form.elements.operation.value;
+  const employeeMovement = operation === 'دين' || ['مرتبات', 'سلفة', 'سلفة موظف', 'سداد سلفة موظف', 'مستحق لموظف', 'دفع مستحق موظف'].includes(type);
+  const customerMovement = operation === 'دفع مستحقات' && type === 'سداد مديونية عميل';
+  const supplierMovement = operation === 'دفع مستحقات' && type === 'سداد مستحقات للمورد';
   $('#manualEmployeeField').classList.toggle('hidden', !employeeMovement);
-  $('#manualCustomerField').classList.toggle('hidden', employeeMovement);
-  $('#manualSupplierField').classList.toggle('hidden', employeeMovement);
+  $('#manualCustomerField').classList.toggle('hidden', employeeMovement || (operation === 'دفع مستحقات' && !customerMovement));
+  $('#manualSupplierField').classList.toggle('hidden', employeeMovement || (operation === 'دفع مستحقات' && !supplierMovement));
   form.elements.employeeCode.required = employeeMovement;
   if (!employeeMovement) { form.elements.employeeCode.value = ''; return; }
   form.elements.customerCode.value = '';
