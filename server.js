@@ -449,6 +449,43 @@ function dailyCloseWorkbook(data, fromDate, toDate = fromDate, reportTitle = 'إ
   return workbook;
 }
 
+async function dailyCloseBuffer(data, fromDate, toDate = fromDate, reportTitle = 'إقفال اليومية') {
+  const raw = XLSX.write(dailyCloseWorkbook(data, fromDate, toDate, reportTitle), { type: 'buffer', bookType: 'xlsx', compression: true });
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(raw);
+  const sheet = workbook.getWorksheet('إقفال اليومية');
+  sheet.views = [{ rightToLeft: true, state: 'frozen', ySplit: 2, showGridLines: false }];
+  const maxColumns = 20;
+  const sectionTitles = new Set(['الملخص السريع', 'الوارد', 'الصادر والخصومات', 'المسحوبات والمصروفات التشغيلية', 'المصروفات الإضافية', 'قطع الغيار المستخدمة في الزيارات', 'دفعات الموردين', 'المبيعات', 'كشف الحساب', 'كل الحركات المالية']);
+  sheet.columns = Array.from({ length: maxColumns }, (_, index) => ({ width: index === 1 ? 32 : 19 }));
+  sheet.eachRow((row, rowNumber) => {
+    const populated = row.values.slice(1).filter((value) => value !== null && value !== undefined && value !== '');
+    const sectionHeading = populated.length === 1 && sectionTitles.has(populated[0]);
+    const reportHeading = rowNumber === 1;
+    for (let column = 1; column <= maxColumns; column += 1) {
+      const cell = row.getCell(column);
+      cell.alignment = { horizontal: 'right', vertical: 'middle', wrapText: true };
+      cell.font = { name: 'Tahoma', size: 12, color: { argb: 'FF111827' } };
+      if (typeof cell.value === 'number') cell.numFmt = '#,##0.00 "ج"';
+    }
+    if (sectionHeading || reportHeading) {
+      row.height = reportHeading ? 30 : 27;
+      if (sectionHeading) sheet.mergeCells(`A${rowNumber}:G${rowNumber}`);
+      for (let column = 1; column <= maxColumns; column += 1) {
+        const cell = row.getCell(column);
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
+        cell.font = { name: 'Tahoma', size: 16, bold: true, color: { argb: 'FF111111' } };
+        cell.border = { bottom: { style: 'medium', color: { argb: 'FFE2A900' } } };
+      }
+    } else if (populated.length > 1 && populated.every((value) => typeof value === 'string')) {
+      row.font = { name: 'Tahoma', size: 12, bold: true, color: { argb: 'FF17243C' } };
+      row.eachCell((cell) => { cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F7FA' } }; });
+    }
+  });
+  workbook.creator = 'المركز الفرنسي';
+  return Buffer.from(await workbook.xlsx.writeBuffer());
+}
+
 function reportHtml(data, fromDate, toDate, title) {
   const escape = (value) => clean(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
   const accounts = data.accounts.filter((account) => { const date = account.executionDate || account.date; return date >= fromDate && date <= toDate; });
@@ -670,7 +707,7 @@ async function api(request, response, pathname, searchParams) {
 
   if (request.method === 'GET' && pathname === '/api/daily-close') {
     const date = clean(searchParams?.get('date')) || new Date().toISOString().slice(0, 10);
-    const buffer = XLSX.write(dailyCloseWorkbook(readData(), date), { type: 'buffer', bookType: 'xlsx', compression: true });
+    const buffer = await dailyCloseBuffer(readData(), date);
     response.writeHead(200, {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': `attachment; filename="daily-close-${date}.xlsx"`,
@@ -690,7 +727,7 @@ async function api(request, response, pathname, searchParams) {
       response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
       return response.end(html);
     }
-    const buffer = XLSX.write(dailyCloseWorkbook(data, from, to, title), { type: 'buffer', bookType: 'xlsx', compression: true });
+    const buffer = await dailyCloseBuffer(data, from, to, title);
     response.writeHead(200, { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Content-Disposition': `attachment; filename="financial-report-${from}-${to}.xlsx"`, 'Content-Length': buffer.length });
     return response.end(buffer);
   }
