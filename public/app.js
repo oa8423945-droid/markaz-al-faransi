@@ -1,5 +1,5 @@
-Warning: truncated output (original token count: 31886)
-Total output lines: 1367
+Warning: truncated output (original token count: 32038)
+Total output lines: 1371
 
 const state = { customers: [], visits: [], inventory: [], suppliers: [], employees: [], expenses: [], movements: [], accounts: [], selectedCustomer: null, movementMode: '', selectedProduct: null, productMovementMode: '', selectedSupplierName: '' };
 const $ = (selector) => document.querySelector(selector);
@@ -239,7 +239,7 @@ function upgradeSearchableChoices() {
     const list = document.createElement('datalist');
     list.id = 'oldProductOptions';
     productSearch.after(list);
-    $('#productSuggestions').classList.add('hidden');
+    $('#productSuggestions').classList.remove('hidden');
   }
   if (!$('#visitForm [name="paymentMethod"]')) {
     const laborLabel = $('#visitForm [name="labor"]').closest('label');
@@ -319,6 +319,10 @@ function renderProductSuggestions() {
   const query = normalized($('#oldProductSearch').value);
   const matches = state.inventory.filter((item) => !query || normalized(`${item.code} ${item.name} ${item.details}`).includes(query));
   $('#oldProductOptions').innerHTML = matches.map((item) => `<option value="${esc(item.code)}" label="${esc(item.name)} — ${esc(item.details || 'بدون تفاصيل')} — متاح ${fmt(item.qty)}">`).join('');
+  const suggestions = $('#productSuggestions');
+  suggestions.classList.remove('hidden');
+  suggestions.innerHTML = matches.length ? matches.map((item) => `<button type="button" data-old-product-code="${esc(item.code)}"><b>${esc(item.code)}</b><span>${esc(item.name)} — ${esc(item.details || 'بدون تفاصيل')} — متاح ${fmt(item.qty)}</span></button>`).join('') : '<small>لا توجد منتجات مطابقة.</small>';
+  suggestions.querySelectorAll('[data-old-product-code]').forEach((button) => button.addEventListener('click', () => selectOldProduct(button.dataset.oldProductCode)));
   const exactItem = state.inventory.find((item) => normalized(item.code) === query);
   if (exactItem) selectOldProduct(exactItem.code);
 }
@@ -794,7 +798,7 @@ function installEmployeesUI() {
   page.innerHTML = `<div class="page-title"><div><span class="eyebrow">فريق العمل</span><h1>الموظفين</h1><p>بيانات الموظفين ورواتبهم وأرصدتهم المالية.</p></div><div class="employee-page-actions"><button id="addEmployeeButton" class="primary" type="button">＋ إضافة موظف</button><button id="stoppedEmployeesButton" class="secondary" type="button">الموقوفين عن العمل</button></div></div><div id="activeEmployeesView" class="panel"><div class="panel-head"><div><h2>الموظفين العاملين</h2><p id="employeesCount"></p></div></div><div id="employeesTable"></div></div><div id="stoppedEmployeesView" class="panel hidden"><div class="panel-head"><div><h2>الموقوفين عن العمل</h2><p id="stoppedEmployeesCount"></p></div><button id="activeEmployeesBack" class="back-btn" type="button">→ رجوع للعاملين</button></div><div id="stoppedEmployeesTable"></div></div>`;
   $('main').appendChild(page);
   const addDialog = document.createElement('dialog'); addDialog.id = 'employeeAddDialog';
-  addDialog.innerHTML = `<form id="employeeAddForm"><button type="button" class="dialog-close">×</button><div class="dialog-title"><span>♟</span><div><h2>إضافة موظف</h2><p>سيتم إنشاء كود E تلقائيًا.</p></div></div><div class="form-grid"><label>الاسم<input name="name" required></label><label>رقم التليفون<input name="phone" required></label><label>تاريخ التوظيف<input name="hireDate" type="date" required></label><label>التخصص<input name="specialty" required placeholder="مثال: ميكانيكا أو كهرباء"></label><label>المرتب الأسبوعي<input name="weeklySalary" type="n…1886 tokens truncated…لية للموظف.</div>'}`;
+  addDialog.innerHTML = `<form id="employeeAddForm"><…2038 tokens truncated…لية للموظف.</div>'}`;
   $('#stopEmployeeButton')?.addEventListener('click', () => openEmployeeStatusDialog(employee));
   $('#reactivateEmployeeButton')?.addEventListener('click', () => reactivateEmployee(employee.code));
   $$('#employeeDetailsContent .account-row').forEach((row) => row.addEventListener('click', () => { $('#employeeDetailsDialog').close(); showAccountDetails(row.dataset.accountCode); }));
