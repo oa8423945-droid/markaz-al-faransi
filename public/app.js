@@ -92,6 +92,7 @@ function go(page) {
   if (page === 'suppliers') renderSuppliers();
   if (page === 'employees') renderEmployees();
   if (page === 'accounts') renderAccounts();
+  if (page === 'reports') renderReports();
 }
 
 function renderDashboard() {
@@ -905,6 +906,47 @@ function installAccountsUI() {
   debtDialog.querySelector('.dialog-close').addEventListener('click', () => debtDialog.close());
 }
 
+function openFinancialReport(report) {
+  go('accounts');
+  openFinancialSummaries();
+  dailyClosingVisible = report === 'daily';
+  supplierDebtsVisible = report === 'supplierDebts';
+  $('#accountStatementView').classList.toggle('hidden', report !== 'statement');
+  if (report === 'statement') statementPeriod = 'daily';
+  renderFinancialSummaries();
+  $('#financialSummariesView').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function installReportsUI() {
+  const accountsNav = $('.nav-btn[data-page="accounts"]');
+  const nav = document.createElement('button');
+  nav.type = 'button'; nav.className = 'nav-btn'; nav.dataset.page = 'reports'; nav.innerHTML = '<span>▣</span> التقارير';
+  accountsNav.after(nav);
+  const page = document.createElement('section');
+  page.id = 'reports'; page.className = 'page';
+  page.innerHTML = `<div class="page-title"><div><span class="eyebrow">التقارير والتصدير</span><h1>التقارير</h1><p>اختر التقرير ثم نزّله بصيغة PDF أو Excel.</p></div></div><div id="reportsContent"></div>`;
+  $('main').appendChild(page);
+  nav.addEventListener('click', () => go('reports'));
+}
+
+function renderReports() {
+  const productCount = state.inventory.length;
+  $('#reportsContent').innerHTML = `<div class="reports-grid"><button class="report-card" type="button" data-report="daily"><span>▤</span><b>قفل اليومية</b><small>ملخص الوارد والصادر وقطع الغيار المستخدمة.</small></button><button class="report-card" type="button" data-report="statement"><span>☷</span><b>كشف الحساب</b><small>كل الحركات المالية مع الرصيد بعد كل عملية.</small></button><button class="report-card" type="button" data-report="supplierDebts"><span>₪</span><b>ديون الموردين</b><small>المدفوع والمتبقي لكل مورد.</small></button><button class="report-card" type="button" data-report="inventory"><span>▦</span><b>جرد المخزن</b><small>${fmt(productCount)} صنف مختلف وقيمة المخزون الحالية.</small></button></div><div id="inventoryAuditView" class="financial-report-section hidden"></div>`;
+  $$('#reportsContent [data-report]').forEach((button) => button.addEventListener('click', () => {
+    if (button.dataset.report === 'inventory') return openInventoryAuditReport();
+    openFinancialReport(button.dataset.report);
+  }));
+}
+
+function openInventoryAuditReport() {
+  const rows = state.inventory.map((item) => ({ code: item.code || '—', statement: [item.name, item.details].filter(Boolean).join(' — ') || '—', quantity: Number(item.qty) || 0, value: (Number(item.qty) || 0) * (Number(item.buy) || 0) }));
+  const total = rows.reduce((sum, item) => sum + item.value, 0);
+  const view = $('#inventoryAuditView');
+  view.classList.remove('hidden');
+  view.innerHTML = `<div class="statement-head"><div><h2>جرد المخزن</h2><p>بيان كل صنف وكميته الحالية وقيمة المخزون.</p></div><details class="download-menu"><summary>تنزيل الجرد</summary><div><a href="/api/inventory-audit?format=pdf" download>تنزيل PDF</a><a href="/api/inventory-audit?format=xlsx" download>تنزيل Excel</a></div></details></div><div class="table-wrap"><table><thead><tr><th>كود المنتج</th><th>البيان</th><th>الكمية الحالية</th><th>قيمة المخزون</th></tr></thead><tbody>${rows.map((item) => `<tr><td><b>${esc(item.code)}</b></td><td>${esc(item.statement)}</td><td>${fmt(item.quantity)}</td><td class="money-value">${fmt(item.value)} ج</td></tr>`).join('') || '<tr><td colspan="4">لا توجد أصناف في المخزن.</td></tr>'}<tr class="supplier-debt-total"><td colspan="2"><b>إجمالي الأصناف المختلفة: ${fmt(rows.length)}</b></td><td colspan="2"><b>إجمالي قيمة البضاعة: ${fmt(total)} ج</b></td></tr></tbody></table></div>`;
+  view.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 function toggleDownloadChoices(show) {
   $('#downloadChoicesView').classList.toggle('hidden', !show);
   ['.financial-summary-head','.financial-export-actions','#financialSummaryContent','#dailyClosingView','#accountStatementView','#supplierDebtsView'].forEach((selector) => $('#financialSummariesView').querySelector(selector)?.classList.toggle('download-page-hidden', show));
@@ -1163,6 +1205,7 @@ installInventoryMovementUI();
 installSuppliersUI();
 installEmployeesUI();
 installAccountsUI();
+installReportsUI();
 installProductDetailsUI();
 upgradeSearchableChoices();
 installGlobalCodeSearch();
