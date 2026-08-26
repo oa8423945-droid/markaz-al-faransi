@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 32769)
-Total output lines: 1380
-
 const state = { customers: [], visits: [], inventory: [], suppliers: [], employees: [], expenses: [], movements: [], accounts: [], selectedCustomer: null, movementMode: '', selectedProduct: null, productMovementMode: '', selectedSupplierName: '' };
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -54,6 +51,8 @@ let partChoiceCounter = 0;
 let financialPeriod = 'daily';
 let dailyClosingVisible = false;
 let statementPeriod = 'daily';
+let statementCustomFrom = '';
+let statementCustomTo = '';
 let supplierDebtsVisible = false;
 
 async function request(url, options) {
@@ -798,7 +797,85 @@ function installEmployeesUI() {
   page.innerHTML = `<div class="page-title"><div><span class="eyebrow">فريق العمل</span><h1>الموظفين</h1><p>بيانات الموظفين ورواتبهم وأرصدتهم المالية.</p></div><div class="employee-page-actions"><button id="addEmployeeButton" class="primary" type="button">＋ إضافة موظف</button><button id="stoppedEmployeesButton" class="secondary" type="button">الموقوفين عن العمل</button></div></div><div id="activeEmployeesView" class="panel"><div class="panel-head"><div><h2>الموظفين العاملين</h2><p id="employeesCount"></p></div></div><div id="employeesTable"></div></div><div id="stoppedEmployeesView" class="panel hidden"><div class="panel-head"><div><h2>الموقوفين عن العمل</h2><p id="stoppedEmployeesCount"></p></div><button id="activeEmployeesBack" class="back-btn" type="button">→ رجوع للعاملين</button></div><div id="stoppedEmployeesTable"></div></div>`;
   $('main').appendChild(page);
   const addDialog = document.createElement('dialog'); addDialog.id = 'employeeAddDialog';
-  addDialog.innerHTML = `<form id="employeeAddForm"><…2769 tokens truncated…ountsTable"></div></div>`;
+  addDialog.innerHTML = `<form id="employeeAddForm"><button type="button" class="dialog-close">×</button><div class="dialog-title"><span>♟</span><div><h2>إضافة موظف</h2><p>سيتم إنشاء كود E تلقائيًا.</p></div></div><div class="form-grid"><label>الاسم<input name="name" required></label><label>رقم التليفون<input name="phone" required></label><label>تاريخ التوظيف<input name="hireDate" type="date" required></label><label>التخصص<input name="specialty" required placeholder="مثال: ميكانيكا أو كهرباء"></label><label>المرتب الأسبوعي<input name="weeklySalary" type="number" min="0" step="0.01" required></label><label class="wide">ملاحظات<textarea name="notes" rows="2"></textarea></label></div><div class="form-actions"><button class="primary" type="submit">حفظ الموظف</button></div></form>`;
+  document.body.appendChild(addDialog); addDialog.querySelector('.dialog-close').addEventListener('click', () => addDialog.close());
+  const details = document.createElement('dialog'); details.id = 'employeeDetailsDialog';
+  details.innerHTML = '<div class="employee-details-dialog"><button type="button" class="dialog-close">×</button><div id="employeeDetailsContent"></div></div>';
+  document.body.appendChild(details); details.querySelector('.dialog-close').addEventListener('click', () => details.close());
+  const statusDialog = document.createElement('dialog'); statusDialog.id = 'employeeStatusDialog';
+  statusDialog.innerHTML = `<form id="employeeStatusForm"><button type="button" class="dialog-close">×</button><input type="hidden" name="employeeCode"><div class="dialog-title"><span>!</span><div><h2>تغيير حالة الموظف</h2><p id="employeeStatusName"></p></div></div><div class="form-grid"><label>الحالة<select name="status" required><option value="موقوف مؤقتًا">موقوف مؤقتًا</option><option value="منتهي الخدمة">منتهي الخدمة</option></select></label><label>تاريخ الإيقاف<input name="stopDate" type="date" required></label><label class="wide">سبب الإيقاف أو إنهاء الخدمة<textarea name="reason" rows="3" required></textarea></label></div><div class="form-actions"><button class="danger-button" type="submit">حفظ ونقل للموقوفين</button></div></form>`;
+  document.body.appendChild(statusDialog); statusDialog.querySelector('.dialog-close').addEventListener('click', () => statusDialog.close());
+  $('#addEmployeeButton').addEventListener('click', () => { $('#employeeAddForm').reset(); $('#employeeAddForm').elements.hireDate.value = new Date().toISOString().slice(0,10); addDialog.showModal(); });
+  $('#employeeAddForm').addEventListener('submit', submitEmployee);
+  $('#employeeStatusForm').addEventListener('submit', submitEmployeeStatus);
+  $('#stoppedEmployeesButton').addEventListener('click', showStoppedEmployees);
+  $('#activeEmployeesBack').addEventListener('click', showActiveEmployees);
+}
+
+function renderEmployees() {
+  const active = state.employees.filter((employee) => !employee.status || employee.status === 'يعمل');
+  $('#employeesCount').textContent = `${fmt(active.length)} موظف يعمل`;
+  if (!active.length) { $('#employeesTable').innerHTML = '<div class="empty-state">لا يوجد موظفون عاملون حاليًا.</div>'; return; }
+  const rows = active.map(employeeTableRow).join('');
+  $('#employeesTable').innerHTML = `<div class="table-wrap"><table><thead><tr><th>الكود</th><th>الاسم</th><th>التليفون</th><th>تاريخ التوظيف</th><th>التخصص</th><th>المشاركات</th><th>المرتب الأسبوعي</th><th>عليه</th><th>له</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  $$('#employeesTable .employee-row').forEach((row) => row.addEventListener('click', () => showEmployeeDetails(row.dataset.employeeCode)));
+}
+
+function employeeTableRow(employee, stopped = false) {
+  return `<tr class="employee-row ${stopped ? 'stopped-employee-row' : ''}" data-employee-code="${esc(employee.code)}"><td><b>${esc(employee.code)}</b></td><td><b>${esc(employee.name)}</b></td><td>${esc(employee.phone)}</td><td>${esc(employee.hireDate)}</td><td>${esc(employee.specialty)}</td><td>${fmt(employee.contributions)}</td><td>${fmt(employee.weeklySalary)} ج</td><td>${fmt(employee.debtOnEmployee)} ج</td><td>${fmt(employee.dueToEmployee)} ج</td>${stopped ? `<td>${esc(employee.status)}</td><td>${esc(employee.stopDate || '—')}</td><td>${esc(employee.stopReason || '—')}</td>` : ''}</tr>`;
+}
+
+function showStoppedEmployees() {
+  $('#activeEmployeesView').classList.add('hidden'); $('#stoppedEmployeesView').classList.remove('hidden');
+  const stopped = state.employees.filter((employee) => employee.status && employee.status !== 'يعمل');
+  $('#stoppedEmployeesCount').textContent = `${fmt(stopped.length)} موظف`;
+  $('#stoppedEmployeesTable').innerHTML = stopped.length ? `<div class="table-wrap"><table><thead><tr><th>الكود</th><th>الاسم</th><th>التليفون</th><th>تاريخ التوظيف</th><th>التخصص</th><th>المشاركات</th><th>المرتب</th><th>عليه</th><th>له</th><th>الحالة</th><th>تاريخ الإيقاف</th><th>السبب</th></tr></thead><tbody>${stopped.map((employee) => employeeTableRow(employee, true)).join('')}</tbody></table></div>` : '<div class="empty-state">لا يوجد موظفون موقوفون عن العمل.</div>';
+  $$('#stoppedEmployeesTable .employee-row').forEach((row) => row.addEventListener('click', () => showEmployeeDetails(row.dataset.employeeCode)));
+}
+
+function showActiveEmployees() { $('#stoppedEmployeesView').classList.add('hidden'); $('#activeEmployeesView').classList.remove('hidden'); renderEmployees(); }
+
+function showEmployeeDetails(code) {
+  const employee = state.employees.find((item) => item.code === code); if (!employee) return;
+  const accounts = state.accounts.filter((account) => account.employeeCode === employee.code);
+  const rows = [...accounts].reverse().map((account) => `<tr class="account-row" data-account-code="${esc(account.code)}"><td>${esc(account.executionDate || account.date)}</td><td>${esc(account.type)}</td><td>${esc(account.description)}</td><td>${fmt(account.total)} ج</td><td>${esc(account.direction)}</td></tr>`).join('');
+  const isActive = !employee.status || employee.status === 'يعمل';
+  $('#employeeDetailsContent').innerHTML = `<div class="dialog-title"><span>♟</span><div><h2>${esc(employee.name)}</h2><p>${esc(employee.code)} · ${esc(employee.specialty)}</p></div></div><div class="employee-status-actions">${isActive ? '<button id="stopEmployeeButton" class="danger-button" type="button">إيقاف أو إنهاء الخدمة</button>' : '<button id="reactivateEmployeeButton" class="primary" type="button">إعادة الموظف للعمل</button>'}</div><div class="employee-summary-grid"><div><small>رقم التليفون</small><b>${esc(employee.phone)}</b></div><div><small>تاريخ التوظيف</small><b>${esc(employee.hireDate)}</b></div><div><small>الحالة</small><b>${esc(employee.status || 'يعمل')}</b></div><div><small>عدد المشاركات</small><b>${fmt(employee.contributions)}</b></div><div><small>المرتب الأسبوعي</small><b>${fmt(employee.weeklySalary)} ج</b></div><div class="employee-debt"><small>مبالغ عليه</small><b>${fmt(employee.debtOnEmployee)} ج</b></div><div class="employee-credit"><small>مبالغ له</small><b>${fmt(employee.dueToEmployee)} ج</b></div>${!isActive ? `<div><small>تاريخ الإيقاف</small><b>${esc(employee.stopDate || '—')}</b></div><div><small>سبب الإيقاف</small><b>${esc(employee.stopReason || '—')}</b></div>` : ''}</div><div class="supplier-movements-title"><h3>الحركات المالية</h3><p>${fmt(accounts.length)} حركة</p></div>${rows ? `<div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>النوع</th><th>البيان</th><th>المبلغ</th><th>الاتجاه</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="empty-state">لا توجد حركات مالية للموظف.</div>'}`;
+  $('#stopEmployeeButton')?.addEventListener('click', () => openEmployeeStatusDialog(employee));
+  $('#reactivateEmployeeButton')?.addEventListener('click', () => reactivateEmployee(employee.code));
+  $$('#employeeDetailsContent .account-row').forEach((row) => row.addEventListener('click', () => { $('#employeeDetailsDialog').close(); showAccountDetails(row.dataset.accountCode); }));
+  $('#employeeDetailsDialog').showModal();
+}
+
+function openEmployeeStatusDialog(employee) {
+  $('#employeeDetailsDialog').close(); const form = $('#employeeStatusForm'); form.reset(); form.elements.employeeCode.value = employee.code; form.elements.stopDate.value = new Date().toISOString().slice(0,10); $('#employeeStatusName').textContent = `${employee.name} — ${employee.code}`; $('#employeeStatusDialog').showModal();
+}
+
+async function submitEmployeeStatus(event) {
+  event.preventDefault();
+  try { const input = Object.fromEntries(new FormData(event.currentTarget)); await request('/api/employees/status', { method: 'POST', body: JSON.stringify(input) }); $('#employeeStatusDialog').close(); await load(); showStoppedEmployees(); toast('تم نقل الموظف إلى الموقوفين عن العمل.'); }
+  catch (error) { toast(error.message, true); }
+}
+
+async function reactivateEmployee(code) {
+  try { await request('/api/employees/status', { method: 'POST', body: JSON.stringify({ employeeCode: code, status: 'يعمل', reason: '' }) }); $('#employeeDetailsDialog').close(); await load(); showActiveEmployees(); toast('تمت إعادة الموظف للعمل.'); }
+  catch (error) { toast(error.message, true); }
+}
+
+async function submitEmployee(event) {
+  event.preventDefault();
+  try { const employee = await request('/api/employees', { method: 'POST', body: JSON.stringify(Object.fromEntries(new FormData(event.currentTarget))) }); $('#employeeAddDialog').close(); await load(); renderEmployees(); toast(`تم إضافة الموظف ${employee.name} — ${employee.code}`); }
+  catch (error) { toast(error.message, true); }
+}
+
+function installAccountsUI() {
+  const supplierNav = $('.nav-btn[data-page="suppliers"]');
+  const nav = document.createElement('button');
+  nav.type = 'button'; nav.className = 'nav-btn'; nav.dataset.page = 'accounts'; nav.innerHTML = '<span>ج</span> الحسابات';
+  supplierNav.after(nav);
+  const page = document.createElement('section');
+  page.id = 'accounts'; page.className = 'page';
+  page.innerHTML = `<div class="page-title"><div><span class="eyebrow">الحركة المالية</span><h1>الحسابات</h1><p>سجل كل الحركات المالية الواردة والصادرة.</p></div><button id="addManualAccountButton" class="primary" type="button">＋ تسجيل حركة</button></div><div class="panel"><div class="panel-head"><div><h2>الحركات المالية</h2><p id="accountsCount"></p></div></div><div id="accountsTable"></div></div>`;
   $('main').appendChild(page);
   const accountActions = document.createElement('div');
   accountActions.className = 'account-page-actions';
@@ -892,11 +969,15 @@ function openInventoryMovementsReport() {
 }
 
 function openInventoryAuditReport() {
+  const from = $('#inventoryAuditFrom')?.value || '';
+  const to = $('#inventoryAuditTo')?.value || '';
   const rows = state.inventory.map((item) => ({ code: item.code || '—', statement: [item.name, item.details].filter(Boolean).join(' — ') || '—', quantity: Number(item.qty) || 0, value: (Number(item.qty) || 0) * (Number(item.buy) || 0) }));
   const total = rows.reduce((sum, item) => sum + item.value, 0);
   const view = $('#inventoryAuditView');
   view.classList.remove('hidden');
-  view.innerHTML = `<div class="statement-head"><div><h2>جرد المخزن</h2><p>بيان كل صنف وكميته الحالية وقيمة المخزون.</p></div><details class="download-menu"><summary>تنزيل الجرد</summary><div><a href="/api/inventory-audit?format=pdf" download>تنزيل PDF</a><a href="/api/inventory-audit?format=xlsx" download>تنزيل Excel</a></div></details></div><div class="table-wrap"><table><thead><tr><th>كود المنتج</th><th>البيان</th><th>الكمية الحالية</th><th>قيمة المخزون</th></tr></thead><tbody>${rows.map((item) => `<tr><td><b>${esc(item.code)}</b></td><td>${esc(item.statement)}</td><td>${fmt(item.quantity)}</td><td class="money-value">${fmt(item.value)} ج</td></tr>`).join('') || '<tr><td colspan="4">لا توجد أصناف في المخزن.</td></tr>'}<tr class="supplier-debt-total"><td colspan="2"><b>إجمالي الأصناف المختلفة: ${fmt(rows.length)}</b></td><td colspan="2"><b>إجمالي قيمة البضاعة: ${fmt(total)} ج</b></td></tr></tbody></table></div>`;
+  const query = `from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+  view.innerHTML = `<div class="statement-head"><div><h2>جرد المخزن</h2><p>اختر مدة الجرد من وإلى، أو اتركها فارغة للجرد الحالي.</p></div><details class="download-menu"><summary>تنزيل الجرد</summary><div><a href="/api/inventory-audit?${query}&format=pdf" download>تنزيل PDF</a><a href="/api/inventory-audit?${query}&format=xlsx" download>تنزيل Excel</a></div></details></div><div class="report-date-range"><label>من <input id="inventoryAuditFrom" type="date" value="${esc(from)}"></label><label>إلى <input id="inventoryAuditTo" type="date" value="${esc(to)}"></label><button class="button secondary" id="inventoryAuditApply">تطبيق المدة</button></div><div class="table-wrap"><table><thead><tr><th>كود المنتج</th><th>البيان</th><th>الكمية الحالية</th><th>قيمة المخزون</th></tr></thead><tbody>${rows.map((item) => `<tr><td><b>${esc(item.code)}</b></td><td>${esc(item.statement)}</td><td>${fmt(item.quantity)}</td><td class="money-value">${fmt(item.value)} ج</td></tr>`).join('') || '<tr><td colspan="4">لا توجد أصناف في المخزن.</td></tr>'}<tr class="supplier-debt-total"><td colspan="2"><b>إجمالي الأصناف المختلفة: ${fmt(rows.length)}</b></td><td colspan="2"><b>إجمالي قيمة البضاعة: ${fmt(total)} ج</b></td></tr></tbody></table></div>`;
+  $('#inventoryAuditApply').addEventListener('click', openInventoryAuditReport);
   view.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -974,17 +1055,20 @@ function renderFinancialSummaries() {
     ${section('قطع الغيار المستخدمة في الزيارات', ['العميل','كود الزيارة','القطع والكميات','قيمة القطع'], visitsWithParts.map((visit) => { const customer = state.customers.find((item) => item.code === visit.customerCode) || {}; return `<tr><td>${esc(customer.name || '—')}<br><small>${esc(visit.customerCode)}</small></td><td>${esc(visit.code)}</td><td>${esc(visit.partsCodes)}</td><td>${fmt(visit.partsTotal)} ج</td></tr>`; }))}
     ${section('دفعات الموردين', ['المورد','المبلغ','طريقة الدفع'], supplierPayments.map((a) => `<tr><td>${esc(a.supplierName)}<br><small>${esc(a.supplierCode)}</small></td><td>${fmt(a.paid)} ج</td><td>${esc(a.paymentMethod || '—')}</td></tr>`))}
     ${section('المبيعات', ['العميل','كود الزيارة','نوع العربية','المصنعية','إجمالي الفاتورة','المدفوع','طريقة الدفع'], sales.map((a) => { const visit = state.visits.find((v) => v.code === a.visitCode) || {}; const customer = state.customers.find((c) => c.code === a.customerCode) || {}; return `<tr><td>${esc(a.customerName || customer.name || '—')}<br><small>${esc(a.customerCode)}</small></td><td>${esc(a.visitCode)}</td><td>${esc(customer.carType || '—')}</td><td>${fmt(visit.labor)} ج</td><td class="money-value">${fmt(visit.total || a.total)} ج</td><td>${fmt(a.paid)} ج</td><td>${esc(a.paymentMethod || '—')}</td></tr>`; }))}`;
-  const statementRange = financialDateRange(statementPeriod, date);
+  const statementRange = statementPeriod === 'custom'
+    ? { from: statementCustomFrom || date, to: statementCustomTo || date, title: 'كشف حساب مخصص' }
+    : financialDateRange(statementPeriod, date);
   const statementAccounts = state.accounts.filter((account) => { const movementDate = account.executionDate || account.date; return movementDate >= statementRange.from && movementDate <= statementRange.to; });
   const statementRows = statementAccounts.map((account) => `<tr class="account-row" data-account-code="${esc(account.code)}"><td>${esc(account.executionDate || account.date)}</td><td>${esc(account.time || '—')}</td><td>${esc(account.description || '—')}</td><td>${esc(account.type)}</td><td><b>${esc(account.code)}</b></td><td>${esc(account.notes || '—')}</td><td>${account.direction === 'صادر' ? `${fmt(account.paid)} ج` : '—'}</td><td>${account.direction === 'وارد' ? `${fmt(account.paid)} ج` : '—'}</td><td><b>${fmt(account.balance)} ج</b></td></tr>`).join('');
   const statementQuery = `from=${encodeURIComponent(statementRange.from)}&to=${encodeURIComponent(statementRange.to)}&title=${encodeURIComponent(`كشف الحساب — ${statementRange.title}`)}`;
-  $('#accountStatementView').innerHTML = `<div class="statement-head"><div><h2>كشف الحساب</h2><p>من ${statementRange.from} إلى ${statementRange.to}</p></div><details class="download-menu"><summary>تنزيل كشف الحساب</summary><div><a href="/api/financial-report?${statementQuery}&format=pdf" target="_blank">تنزيل PDF</a><a href="/api/financial-report?${statementQuery}&format=xlsx" download>تنزيل Excel</a></div></details></div><div class="financial-period-tabs statement-period-tabs"><button class="${statementPeriod === 'daily' ? 'active' : ''}" data-statement-period="daily">يومي</button><button class="${statementPeriod === 'weekly' ? 'active' : ''}" data-statement-period="weekly">أسبوعي</button><button class="${statementPeriod === 'monthly' ? 'active' : ''}" data-statement-period="monthly">شهري</button><button class="${statementPeriod === 'quarterly' ? 'active' : ''}" data-statement-period="quarterly">ربع سنوي</button><button class="${statementPeriod === 'halfyear' ? 'active' : ''}" data-statement-period="halfyear">نصف سنوي</button><button class="${statementPeriod === 'yearly' ? 'active' : ''}" data-statement-period="yearly">سنوي</button></div><div class="financial-report-section"><h2>${statementRange.title}</h2><div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>الوقت</th><th>البيان</th><th>نوع الحركة</th><th>كود الحركة</th><th>الملاحظات</th><th>مدين</th><th>دائن</th><th>الرصيد بعد العملية</th></tr></thead><tbody>${statementRows || '<tr><td colspan="9">لا توجد حركات في هذه الفترة.</td></tr>'}</tbody></table></div></div>`;
+  $('#accountStatementView').innerHTML = `<div class="statement-head"><div><h2>كشف الحساب</h2><p>من ${statementRange.from} إلى ${statementRange.to}</p></div><details class="download-menu"><summary>تنزيل كشف الحساب</summary><div><a href="/api/financial-report?${statementQuery}&format=pdf" target="_blank">تنزيل PDF</a><a href="/api/financial-report?${statementQuery}&format=xlsx" download>تنزيل Excel</a></div></details></div><div class="financial-period-tabs statement-period-tabs"><button class="${statementPeriod === 'daily' ? 'active' : ''}" data-statement-period="daily">يومي</button><button class="${statementPeriod === 'weekly' ? 'active' : ''}" data-statement-period="weekly">أسبوعي</button><button class="${statementPeriod === 'monthly' ? 'active' : ''}" data-statement-period="monthly">شهري</button><button class="${statementPeriod === 'quarterly' ? 'active' : ''}" data-statement-period="quarterly">ربع سنوي</button><button class="${statementPeriod === 'halfyear' ? 'active' : ''}" data-statement-period="halfyear">نصف سنوي</button><button class="${statementPeriod === 'yearly' ? 'active' : ''}" data-statement-period="yearly">سنوي</button><button class="${statementPeriod === 'custom' ? 'active' : ''}" data-statement-period="custom">مدة مخصصة</button></div><div class="report-date-range"><label>من <input id="statementCustomFrom" type="date" value="${esc(statementCustomFrom)}"></label><label>إلى <input id="statementCustomTo" type="date" value="${esc(statementCustomTo)}"></label><button class="button secondary" id="statementCustomApply">تطبيق المدة</button></div><div class="financial-report-section"><h2>${statementRange.title}</h2><div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>الوقت</th><th>البيان</th><th>نوع الحركة</th><th>كود الحركة</th><th>الملاحظات</th><th>مدين</th><th>دائن</th><th>الرصيد بعد العملية</th></tr></thead><tbody>${statementRows || '<tr><td colspan="9">لا توجد حركات في هذه الفترة.</td></tr>'}</tbody></table></div></div>`;
   const supplierDebtRows = state.suppliers.filter((supplier) => Number(supplier.paid || 0) + Number(supplier.due || 0) > 0).sort((first, second) => Number(second.due || 0) - Number(first.due || 0));
   const supplierDebtTotals = supplierDebtRows.reduce((totals, supplier) => ({ paid: totals.paid + Number(supplier.paid || 0), due: totals.due + Number(supplier.due || 0) }), { paid: 0, due: 0 });
   $('#supplierDebtsButton').textContent = supplierDebtsVisible ? 'إغلاق ديون الموردين' : 'ديون الموردين';
   $('#supplierDebtsView').classList.toggle('hidden', !supplierDebtsVisible);
   $('#supplierDebtsView').innerHTML = `<div class="statement-head supplier-debts-head"><div><h2>ديون الموردين</h2><p>إجمالي ما تم دفعه والمتبقي لكل مورد.</p></div><details class="download-menu"><summary>تنزيل</summary><div><a href="/api/supplier-debts?format=pdf" download>تنزيل PDF</a><a href="/api/supplier-debts?format=xlsx" download>تنزيل Excel</a></div></details></div><div class="financial-report-section"><div class="table-wrap"><table><thead><tr><th>كود المورد</th><th>اسم المورد</th><th>إجمالي المبلغ</th><th>المبلغ المدفوع</th><th>المبلغ المتبقي</th></tr></thead><tbody>${supplierDebtRows.map((supplier) => `<tr class="supplier-debt-row" data-supplier-code="${esc(supplier.code)}"><td><b>${esc(supplier.code || '—')}</b></td><td>${esc(supplier.name || '—')}</td><td>${fmt(Number(supplier.paid || 0) + Number(supplier.due || 0))} ج</td><td>${fmt(supplier.paid)} ج</td><td><b>${fmt(supplier.due)} ج</b></td></tr>`).join('') || '<tr><td colspan="5">لا توجد ديون مسجلة على الموردين.</td></tr>'}<tr class="supplier-debt-total"><td></td><td><b>الإجمالي</b></td><td><b>${fmt(supplierDebtTotals.paid + supplierDebtTotals.due)} ج</b></td><td><b>${fmt(supplierDebtTotals.paid)} ج</b></td><td><b>${fmt(supplierDebtTotals.due)} ج</b></td></tr></tbody></table></div></div>`;
   $$('#accountStatementView [data-statement-period]').forEach((button) => button.addEventListener('click', () => { statementPeriod = button.dataset.statementPeriod; renderFinancialSummaries(); }));
+  $('#statementCustomApply').addEventListener('click', () => { statementCustomFrom = $('#statementCustomFrom').value; statementCustomTo = $('#statementCustomTo').value; statementPeriod = 'custom'; renderFinancialSummaries(); });
   $$('#accountStatementView .account-row').forEach((row) => row.addEventListener('click', () => showAccountDetails(row.dataset.accountCode)));
   $$('#supplierDebtsView .supplier-debt-row').forEach((row) => row.addEventListener('click', () => { const supplier = state.suppliers.find((item) => item.code === row.dataset.supplierCode); state.selectedSupplierName = supplier?.name || ''; go('suppliers'); showSupplierDetails(row.dataset.supplierCode); }));
 }
@@ -1302,4 +1386,3 @@ $('#inventoryForm').addEventListener('submit', async (event) => {
 
 $('#today').textContent = new Intl.DateTimeFormat('ar-EG', { dateStyle: 'full' }).format(new Date());
 load();
-
