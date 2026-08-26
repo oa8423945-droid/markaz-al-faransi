@@ -635,6 +635,62 @@ function inventoryAuditPdf(data) {
   } catch (error) { reject(error); } });
 }
 
+function externalDebtRows(data) {
+  const customers = (data.customers || []).filter((customer) => Number(customer.dueFromCustomer) > 0).map((customer) => ({
+    code: customer.code || '—', statement: `عميل — ${customer.name || 'غير معروف'}`, amount: Number(customer.dueFromCustomer) || 0,
+  }));
+  const employees = (data.employees || []).filter((employee) => Number(employee.debtOnEmployee) > 0).map((employee) => ({
+    code: employee.code || '—', statement: `موظف — ${employee.name || 'غير معروف'}`, amount: Number(employee.debtOnEmployee) || 0,
+  }));
+  const knownCodes = new Set([...customers, ...employees].map((item) => item.code));
+  const otherPeople = (data.accounts || []).filter((account) => account.direction === 'مديونية على الغير' && !knownCodes.has(account.customerCode) && !knownCodes.has(account.employeeCode)).map((account) => ({
+    code: account.code || '—', statement: clean(account.description) || 'جهة خارجية', amount: Number(account.due) || 0,
+  })).filter((item) => item.amount > 0);
+  return [...customers, ...employees, ...otherPeople].sort((first, second) => second.amount - first.amount);
+}
+
+async function externalDebtsWorkbook(data) {
+  const rows = externalDebtRows(data);
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'المركز الفرنسي'; workbook.created = new Date();
+  const sheet = workbook.addWorksheet('الديون الخارجية للمركز', { views: [{ rightToLeft: true, showGridLines: true }] });
+  sheet.addRow(['تقرير الديون الخارجية للمركز', `تاريخ التقرير: ${new Date().toISOString().slice(0, 10)}`]);
+  sheet.addRow([]); sheet.addRow(['الكود', 'البيان', 'المبلغ المطلوب']);
+  rows.forEach((item) => sheet.addRow([item.code, item.statement, item.amount]));
+  sheet.addRow([]); sheet.addRow(['إجمالي الأشخاص', rows.length]);
+  const totalRow = sheet.addRow(['إجمالي المبلغ المطلوب', { formula: `SUM(C4:C${Math.max(4, rows.length + 3)})`, result: rows.reduce((sum, item) => sum + item.amount, 0) }]);
+  sheet.getColumn(1).width = 18; sheet.getColumn(2).width = 42; sheet.getColumn(3).width = 22;
+  sheet.getColumn(3).numFmt = '#,##0.00'; totalRow.getCell(2).numFmt = '#,##0.00';
+  return Buffer.from(await workbook.xlsx.writeBuffer());
+}
+
+function externalDebtsPdf(data) {
+  return new Promise((resolve, reject) => { try {
+    const rows = externalDebtRows(data); const doc = new PDFDocument({ size: 'A4', margins: { top: 38, right: 40, bottom: 46, left: 40 }, bufferPages: true });
+    const chunks = []; doc.on('data', (chunk) => chunks.push(chunk)); doc.on('end', () => resolve(Buffer.concat(chunks))); doc.on('error', reject);
+    const fonts = path.join(process.env.WINDIR || 'C:\\Windows', 'Fonts');
+    const regular = ['tahoma.ttf', 'arial.ttf'].map((name) => path.join(fonts, name)).find(fs.existsSync);
+    const bold = ['tahomabd.ttf', 'arialbd.ttf'].map((name) => path.join(fonts, name)).find(fs.existsSync);
+    if (!regular || !bold) throw new Error('تعذر العثور على خط عربي مناسب لإنشاء التقرير.');
+    doc.registerFont('Arabic', regular); doc.registerFont('ArabicBold', bold);
+    const rtl = (text, x, y, width, options = {}) => doc.font(options.bold ? 'ArabicBold' : 'Arabic').fontSize(options.size || 9).fillColor(options.color || '#111827').text(String(text).replace(/\s+/g, '\u00A0'), x, y, { width, align: 'right', lineGap: options.lineGap || 0 });
+    const reverse = (value) => [...String(value)].reverse().join(''); const money = (value) => Number(value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const pdfStatement = (value) => String(value).replace(/[A-Za-z0-9][A-Za-z0-9 .-]*/g, (latinText) => reverse(latinText));
+    const left = 40; const width = doc.page.width - 80; const columns = [145, 280, 90];
+    const header = (continued = false) => { rtl(continued ? 'الديون الخارجية للمركز - تابع' : 'تقرير الديون الخارجية للمركز', left, 44, width, { bold: true, size: 19, color: '#17243C' }); rtl(`تاريخ التقرير: ${reverse(new Date().toISOString().slice(0, 10))}`, left, 74, width, { size: 9, color: '#667085' }); doc.moveTo(left, 96).lineTo(left + width, 96).lineWidth(3).strokeColor('#F7941D').stroke(); };
+    const tableHeader = (y) => { const labels = ['المبلغ المطلوب', 'البيان', 'الكود']; let x = left; labels.forEach((label, index) => { doc.rect(x, y, columns[index], 30).fillAndStroke('#FFD966', '#D9A900'); rtl(label, x + 4, y + 9, columns[index] - 8, { bold: true, size: 8 }); x += columns[index]; }); return y + 30; };
+    header(); let y = tableHeader(112);
+    const drawRow = (values) => { const height = Math.max(31, doc.heightOfString(String(values[1]), { width: columns[1] - 10, align: 'right' }) + 16); if (y + height > 746) { doc.addPage(); header(true); y = tableHeader(112); } let x = left; values.forEach((value, index) => { doc.rect(x, y, columns[index], height).fillAndStroke('#FFFFFF', '#E5E7EB'); rtl(value, x + 5, y + 8, columns[index] - 10, { size: 8 }); x += columns[index]; }); y += height; };
+    if (rows.length) rows.forEach((item) => drawRow([money(item.amount), pdfStatement(item.statement), item.code]));
+    else drawRow(['0.00', 'لا توجد ديون خارجية مسجلة', '—']);
+    y += 12; const total = rows.reduce((sum, item) => sum + item.amount, 0);
+    doc.roundedRect(left, y, width, 50, 8).fillAndStroke('#F8FAFC', '#DDE3EC');
+    rtl(`إجمالي الأشخاص: ${reverse(rows.length)}`, left + width / 2, y + 10, width / 2 - 12, { bold: true, size: 10 });
+    rtl(`إجمالي المبلغ المطلوب: ${reverse(money(total))} ج`, left + 12, y + 28, width - 24, { bold: true, size: 11, color: '#17243C' });
+    rtl('المركز الفرنسي - تقرير مالي داخلي', left, Math.max(y + 68, 780), width, { bold: true, size: 8, color: '#667085' }); doc.end();
+  } catch (error) { reject(error); } });
+}
+
 function json(response, status, body) {
   response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
   response.end(JSON.stringify(body));
@@ -828,6 +884,19 @@ async function api(request, response, pathname, searchParams) {
     }
     const buffer = await inventoryAuditWorkbook(data);
     response.writeHead(200, { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Content-Disposition': 'attachment; filename="inventory-audit.xlsx"', 'Content-Length': buffer.length, 'Cache-Control': 'no-store' });
+    return response.end(buffer);
+  }
+
+  if (request.method === 'GET' && pathname === '/api/external-debts') {
+    const format = clean(searchParams?.get('format')) || 'xlsx';
+    const data = readData();
+    if (format === 'pdf') {
+      const buffer = await externalDebtsPdf(data);
+      response.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="external-debts.pdf"', 'Content-Length': buffer.length, 'Cache-Control': 'no-store' });
+      return response.end(buffer);
+    }
+    const buffer = await externalDebtsWorkbook(data);
+    response.writeHead(200, { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Content-Disposition': 'attachment; filename="external-debts.xlsx"', 'Content-Length': buffer.length, 'Cache-Control': 'no-store' });
     return response.end(buffer);
   }
 
