@@ -135,7 +135,7 @@ function appendAccount(accounts, account) {
 function syncCustomerDebts(customers, accounts) {
   for (const customer of customers) {
     const linked = accounts.filter((account) => account.customerCode === customer.code);
-    customer.dueFromCustomer = linked.reduce((sum, account) => sum + (account.direction === 'مديونية على الغير' ? account.due : account.direction === 'وارد' ? account.due : 0), 0);
+    customer.dueFromCustomer = Math.max(0, linked.reduce((sum, account) => sum + (account.direction === 'مديونية على الغير' ? account.due : account.direction === 'وارد' && account.type !== 'سداد مديونية' ? account.due : account.type === 'سداد مديونية' ? -account.paid : 0), 0));
     customer.dueFromCenter = linked.reduce((sum, account) => sum + (account.direction === 'مديونية على المركز' ? account.due : 0), 0);
   }
 }
@@ -1036,6 +1036,7 @@ async function api(request, response, pathname, searchParams) {
     if (type === 'سداد مستحقات') {
       const amount = Math.max(0, Number(input.amount) || 0);
       const payment = paymentInfo(input, amount);
+      if (payment.payments.some((entry) => entry.method === 'آجل')) return json(response, 400, { error: 'لا يمكن تسجيل السداد بطريقة آجل.' });
       if (!supplier) return json(response, 400, { error: 'اختر المورد قبل تسجيل السداد.' });
       if (!amount) return json(response, 400, { error: 'اكتب مبلغ السداد.' });
       if (amount > supplier.due) return json(response, 400, { error: `مبلغ السداد أكبر من المستحق على المورد (${supplier.due}).` });
@@ -1058,6 +1059,7 @@ async function api(request, response, pathname, searchParams) {
       const buy = Math.max(0, Number(input.buy) || 0);
       const sell = Math.max(0, Number(input.sell) || 0);
       const payment = paymentInfo(input, 0);
+      if (payment.payments.some((entry) => entry.method === 'آجل')) return json(response, 400, { error: 'التوريد لا يقبل طريقة دفع آجل.' });
       const paid = payment.paid;
       if (!item) return json(response, 400, { error: 'اختر منتجًا موجودًا من المخزن.' });
       if (!qty) return json(response, 400, { error: 'اكتب كمية صحيحة.' });
@@ -1103,6 +1105,8 @@ async function api(request, response, pathname, searchParams) {
     const supplier = data.suppliers.find((item) => item.code === supplierKey || item.name === supplierKey) || null;
     const employee = data.employees.find((item) => item.code === employeeKey || item.name === employeeKey) || null;
     const employeeMovement = ['مرتبات', 'سلفة موظف', 'سداد سلفة موظف', 'مستحق لموظف', 'دفع مستحق موظف'].includes(type);
+    if (type === 'سداد مديونية' && !customer) return json(response, 400, { error: 'اختر العميل قبل سداد مديونيته.' });
+    if (type === 'سداد مديونية' && amount > customer.dueFromCustomer) return json(response, 400, { error: `المبلغ أكبر من مديونية العميل (${customer.dueFromCustomer}).` });
     if (employeeMovement && !employee) return json(response, 400, { error: 'اختر الموظف المرتبط بالحركة.' });
     if (type === 'مرتبات' && employee.status && employee.status !== 'يعمل') return json(response, 400, { error: 'لا يمكن صرف مرتب لموظف موقوف عن العمل.' });
     if (type === 'سداد سلفة موظف' && amount > employee.debtOnEmployee) return json(response, 400, { error: `المبلغ أكبر من السلفة المتبقية على الموظف (${employee.debtOnEmployee}).` });
