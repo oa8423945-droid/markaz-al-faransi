@@ -931,9 +931,10 @@ function installReportsUI() {
 
 function renderReports() {
   const productCount = state.inventory.length;
-  $('#reportsContent').innerHTML = `<div class="reports-grid"><button class="report-card" type="button" data-report="daily"><span>▤</span><b>قفل اليومية</b><small>ملخص الوارد والصادر وقطع الغيار المستخدمة.</small></button><button class="report-card" type="button" data-report="statement"><span>☷</span><b>كشف الحساب</b><small>كل الحركات المالية مع الرصيد بعد كل عملية.</small></button><button class="report-card" type="button" data-report="supplierDebts"><span>₪</span><b>ديون الموردين</b><small>المدفوع والمتبقي لكل مورد.</small></button><button class="report-card" type="button" data-report="inventory"><span>▦</span><b>جرد المخزن</b><small>${fmt(productCount)} صنف مختلف وقيمة المخزون الحالية.</small></button></div><div id="inventoryAuditView" class="financial-report-section hidden"></div>`;
+  $('#reportsContent').innerHTML = `<div class="reports-grid"><button class="report-card" type="button" data-report="daily"><span>▤</span><b>قفل اليومية</b><small>ملخص الوارد والصادر وقطع الغيار المستخدمة.</small></button><button class="report-card" type="button" data-report="statement"><span>☷</span><b>كشف الحساب</b><small>كل الحركات المالية مع الرصيد بعد كل عملية.</small></button><button class="report-card" type="button" data-report="supplierDebts"><span>₪</span><b>ديون الموردين</b><small>المدفوع والمتبقي لكل مورد.</small></button><button class="report-card" type="button" data-report="externalDebts"><span>◉</span><b>الديون الخارجية للمركز</b><small>المبالغ المستحقة على العملاء والموظفين والجهات الأخرى.</small></button><button class="report-card" type="button" data-report="inventory"><span>▦</span><b>جرد المخزن</b><small>${fmt(productCount)} صنف مختلف وقيمة المخزون الحالية.</small></button></div><div id="inventoryAuditView" class="financial-report-section hidden"></div>`;
   $$('#reportsContent [data-report]').forEach((button) => button.addEventListener('click', () => {
     if (button.dataset.report === 'inventory') return openInventoryAuditReport();
+    if (button.dataset.report === 'externalDebts') return openExternalDebtsReport();
     openFinancialReport(button.dataset.report);
   }));
 }
@@ -944,6 +945,18 @@ function openInventoryAuditReport() {
   const view = $('#inventoryAuditView');
   view.classList.remove('hidden');
   view.innerHTML = `<div class="statement-head"><div><h2>جرد المخزن</h2><p>بيان كل صنف وكميته الحالية وقيمة المخزون.</p></div><details class="download-menu"><summary>تنزيل الجرد</summary><div><a href="/api/inventory-audit?format=pdf" download>تنزيل PDF</a><a href="/api/inventory-audit?format=xlsx" download>تنزيل Excel</a></div></details></div><div class="table-wrap"><table><thead><tr><th>كود المنتج</th><th>البيان</th><th>الكمية الحالية</th><th>قيمة المخزون</th></tr></thead><tbody>${rows.map((item) => `<tr><td><b>${esc(item.code)}</b></td><td>${esc(item.statement)}</td><td>${fmt(item.quantity)}</td><td class="money-value">${fmt(item.value)} ج</td></tr>`).join('') || '<tr><td colspan="4">لا توجد أصناف في المخزن.</td></tr>'}<tr class="supplier-debt-total"><td colspan="2"><b>إجمالي الأصناف المختلفة: ${fmt(rows.length)}</b></td><td colspan="2"><b>إجمالي قيمة البضاعة: ${fmt(total)} ج</b></td></tr></tbody></table></div>`;
+  view.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function openExternalDebtsReport() {
+  const rows = [
+    ...state.customers.filter((customer) => Number(customer.dueFromCustomer) > 0).map((customer) => ({ code: customer.code || '—', statement: `عميل — ${customer.name || 'غير معروف'}`, amount: Number(customer.dueFromCustomer) || 0 })),
+    ...state.employees.filter((employee) => Number(employee.debtOnEmployee) > 0).map((employee) => ({ code: employee.code || '—', statement: `موظف — ${employee.name || 'غير معروف'}`, amount: Number(employee.debtOnEmployee) || 0 })),
+  ].sort((first, second) => second.amount - first.amount);
+  const total = rows.reduce((sum, item) => sum + item.amount, 0);
+  const view = $('#inventoryAuditView');
+  view.classList.remove('hidden');
+  view.innerHTML = `<div class="statement-head"><div><h2>الديون الخارجية للمركز</h2><p>كل الأموال المستحقة على العملاء والموظفين والجهات الخارجية.</p></div><details class="download-menu"><summary>تنزيل التقرير</summary><div><a href="/api/external-debts?format=pdf" download>تنزيل PDF</a><a href="/api/external-debts?format=xlsx" download>تنزيل Excel</a></div></details></div><div class="table-wrap"><table><thead><tr><th>الكود</th><th>البيان</th><th>المبلغ المطلوب</th></tr></thead><tbody>${rows.map((item) => `<tr><td><b>${esc(item.code)}</b></td><td>${esc(item.statement)}</td><td class="money-value">${fmt(item.amount)} ج</td></tr>`).join('') || '<tr><td colspan="3">لا توجد ديون خارجية مسجلة.</td></tr>'}<tr class="supplier-debt-total"><td><b>إجمالي الأشخاص: ${fmt(rows.length)}</b></td><td colspan="2"><b>إجمالي المبلغ المطلوب: ${fmt(total)} ج</b></td></tr></tbody></table></div>`;
   view.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
